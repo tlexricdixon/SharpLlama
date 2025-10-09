@@ -1,8 +1,9 @@
 using System.Text;
 using Entities;
 using Microsoft.EntityFrameworkCore;
+using SharpLlama.Entities;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 /// <summary>
 /// Provides lightweight, pattern-based structured (EF Core) query handling for

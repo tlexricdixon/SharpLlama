@@ -1,9 +1,9 @@
-using Microsoft.AspNetCore.Mvc;
-using Contracts;
 using LLama.Common;
+using Microsoft.AspNetCore.Mvc;
+using SharpLlama.Contracts;
+using SharpLlama.Entities;
+using SharpLlama.Infrastructure;
 using System.Diagnostics;
-using Entities;
-using Infrastructure;
 
 namespace SharpLlama.Controllers;
 

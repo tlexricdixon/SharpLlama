@@ -1,6 +1,6 @@
+using SharpLlama.Contracts;
 using System.Net.Mime;
 using System.Text.Json;
-using Contracts;
 
 namespace SharpLlama.Middleware;
 

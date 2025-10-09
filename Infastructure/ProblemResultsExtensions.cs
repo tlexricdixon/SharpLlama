@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Infrastructure;
+namespace SharpLlama.Infrastructure;
 
 public static class ProblemResultsExtensions
 {

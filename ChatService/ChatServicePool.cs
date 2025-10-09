@@ -1,10 +1,10 @@
-using Contracts;
+using SharpLlama.Contracts;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Options;
-using Infrastructure;
+using SharpLlama.Infrastructure;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 /// <summary>
 /// Provides a pooled set of chat service instances (stateful and stateless) to reduce the overhead

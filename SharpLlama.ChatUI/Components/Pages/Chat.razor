@@ -6,7 +6,7 @@
 
 <div class="config">
     <label>API Base URL:
-        <input @bind="_baseUrl" placeholder="https://localhost:5001" />
+        <input @bind="_baseUrl" placeholder="https://localhost:7055" />
     </label>
     <label>API Key:
         <input @bind="_apiKey" />
@@ -41,7 +41,7 @@
 }
 
 @code {
-    private string _baseUrl = "https://localhost:5001";
+    private string _baseUrl = "https://localhost:7055";
     private string? _apiKey;
     private string _prompt = "";
     private bool _sending;

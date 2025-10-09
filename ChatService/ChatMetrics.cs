@@ -1,9 +1,9 @@
-using Contracts;
+using SharpLlama.Contracts;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 public class ChatMetrics : IChatMetrics
 {

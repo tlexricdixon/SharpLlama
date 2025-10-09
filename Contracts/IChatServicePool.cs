@@ -1,8 +1,4 @@
-using Contracts;
-using Entities;
-using LLama.Common;
-
-namespace Contracts;
+namespace SharpLlama.Contracts;
 
 public interface IChatServicePool
 {

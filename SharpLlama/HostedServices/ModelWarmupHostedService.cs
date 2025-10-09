@@ -1,6 +1,5 @@
-using ChatService;
-using Contracts; // add for ILoggerManager
 using LLama.Common;
+using SharpLlama.Contracts;
 
 namespace SharpLlama.HostedServices;
 

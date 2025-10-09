@@ -1,9 +1,8 @@
-using System.Collections.Concurrent;
+using SharpLlama.Contracts;
 using System.Security.Cryptography;
 using System.Text;
-using Contracts;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 /// <summary>
 /// Simple in-process LRU (least recently used) cache for chat responses.

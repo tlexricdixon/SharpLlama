@@ -1,5 +1,6 @@
-using Contracts;
 using Microsoft.SemanticKernel;
+using SharpLlama.ChatService;
+using SharpLlama.Contracts;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;

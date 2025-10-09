@@ -1,5 +1,6 @@
 using ChatService;
 using Microsoft.AspNetCore.Mvc;
+using SharpLlama.ChatService;
 
 namespace SharpLlama.Controllers;
 

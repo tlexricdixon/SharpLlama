@@ -1,15 +1,15 @@
 using ChatService.Plugins;
-using Contracts;
 using LLama;
 using LLama.Common;
 using LLama.Native;
 using Microsoft.Extensions.Configuration;
 using Microsoft.SemanticKernel;
+using SharpLlama.Contracts;
 using System.Diagnostics;
 using System.Text;
 using static LLama.LLamaTransforms;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 /// <summary>
 /// Stateless chat service that:
@@ -53,7 +53,8 @@ public class EnhancedStatelessChatService : IStatelessChatService
         {
             var baseDir = AppContext.BaseDirectory;
             var candidate = Path.GetFullPath(Path.Combine(baseDir, modelPath));
-            if (File.Exists(candidate)) modelPath = candidate; else
+            if (File.Exists(candidate)) modelPath = candidate;
+            else
             {
                 var devCandidate = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", modelPath));
                 if (File.Exists(devCandidate)) modelPath = devCandidate;
@@ -67,7 +68,7 @@ public class EnhancedStatelessChatService : IStatelessChatService
         var kernelBuilder = Kernel.CreateBuilder();
         _kernel = kernelBuilder.Build();
 
-        _plugins = plugins?.ToList() ?? new List<ISemanticKernelPlugin>{ new InputValidationPlugin(), new ContextEnhancementPlugin(_cache), new ResponseFormattingPlugin() };
+        _plugins = plugins?.ToList() ?? new List<ISemanticKernelPlugin> { new InputValidationPlugin(), new ContextEnhancementPlugin(_cache), new ResponseFormattingPlugin() };
         _logger.LogDebug($"Using plugins: {string.Join(", ", _plugins.Select(p => p.Name))}");
 
         foreach (var plugin in _plugins)

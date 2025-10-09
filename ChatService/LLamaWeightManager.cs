@@ -1,9 +1,9 @@
-using Contracts;
 using LLama;
 using LLama.Common;
+using SharpLlama.Contracts;
 using System.Collections.Concurrent;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 /// <summary>
 /// Manages lifecycle (loading, caching, fallback, disposal) of <see cref="LLamaWeights"/> keyed by resolved absolute model path.

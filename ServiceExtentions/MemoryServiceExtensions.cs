@@ -1,5 +1,4 @@
 using ChatService;
-using Contracts;
 using LLama;
 using LLama.Common;
 using LLama.Native;
@@ -7,8 +6,10 @@ using LLamaSharp.KernelMemory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.KernelMemory;
+using SharpLlama.ChatService;
+using SharpLlama.Contracts;
 
-namespace ServiceExtentions;
+namespace SharpLlama.ServiceExtentions;
 
 public static class MemoryServiceExtensions
 {

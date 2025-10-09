@@ -1,4 +1,4 @@
-namespace Entities;
+namespace SharpLlama.Entities;
 
 public static class ChatValidationConstants
 {

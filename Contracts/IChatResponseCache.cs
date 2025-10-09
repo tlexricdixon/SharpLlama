@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Caching.Memory;
 
-namespace Contracts;
+namespace SharpLlama.Contracts;
 
 public interface IChatResponseCache
 {

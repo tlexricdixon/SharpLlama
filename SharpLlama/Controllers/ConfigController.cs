@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using Infrastructure;
-using System.IO;
+using SharpLlama.Infrastructure;
 
 namespace SharpLlama.Controllers;
 
@@ -21,8 +20,8 @@ public sealed class ConfigController : ControllerBase
         IOptionsMonitor<OtlpOptions> otlp)
     {
         _model = model.CurrentValue;
-        _chat  = chat.CurrentValue;
-        _otlp  = otlp.CurrentValue;
+        _chat = chat.CurrentValue;
+        _otlp = otlp.CurrentValue;
     }
 
     [HttpGet]

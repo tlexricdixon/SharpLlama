@@ -1,12 +1,12 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
-using ChatService;
-using Contracts;
-using Entities;
 using LLama.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SharpLlama.ChatService;
+using SharpLlama.Contracts;
+using SharpLlama.Entities;
 
 namespace SharpLlama.Benchmarks;
 
@@ -32,27 +32,27 @@ public class ChatServiceBenchmarks
     {
         // Configure services
         var services = new ServiceCollection();
-        
+
         // Add configuration
         var configBuilder = new ConfigurationBuilder()
             .AddJsonFile("appsettings.json", optional: true)
             .AddEnvironmentVariables();
-        
+
         _configuration = configBuilder.Build();
         services.AddSingleton(_configuration);
 
         // Add logging
         services.AddLogging(builder => builder.AddConsole());
-        
+
         // Add mock logger manager for benchmarking
         services.AddSingleton<ILoggerManager, MockLoggerManager>();
-        
+
         // Add chat services
         services.AddTransient<IStatefulChatService, StatefulChatService>();
         services.AddTransient<IStatelessChatService, StatelessChatService>();
 
         _serviceProvider = services.BuildServiceProvider();
-        
+
         _logger = _serviceProvider.GetRequiredService<ILoggerManager>();
         _statefulChatService = _serviceProvider.GetRequiredService<IStatefulChatService>();
         _statelessChatService = _serviceProvider.GetRequiredService<IStatelessChatService>();
@@ -61,7 +61,7 @@ public class ChatServiceBenchmarks
         _shortMessage = new SendMessageInput { Text = "Hello" };
         _mediumMessage = new SendMessageInput { Text = "Can you explain what machine learning is in simple terms?" };
         _longMessage = new SendMessageInput { Text = "I need a detailed explanation of how neural networks work, including the mathematical foundations, backpropagation algorithm, and various architectures like CNNs and RNNs. Please provide examples and use cases for each type." };
-        
+
         _historyInput = new HistoryInput
         {
             Messages = new List<HistoryInput.HistoryItem>
@@ -102,10 +102,10 @@ public class ChatServiceBenchmarks
     public async Task<string> StatelessChatService_History()
     {
         var history = new ChatHistory();
-        var messages = _historyInput.Messages.Select(m => 
+        var messages = _historyInput.Messages.Select(m =>
             new ChatHistory.Message(Enum.Parse<AuthorRole>(m.Role), m.Content));
         history.Messages.AddRange(messages);
-        
+
         return await _statelessChatService.SendAsync(history);
     }
 

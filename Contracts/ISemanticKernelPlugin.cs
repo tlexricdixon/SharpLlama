@@ -1,6 +1,6 @@
 using Microsoft.SemanticKernel;
 
-namespace Contracts;
+namespace SharpLlama.Contracts;
 
 public interface ISemanticKernelPlugin
 {

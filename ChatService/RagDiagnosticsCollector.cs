@@ -1,8 +1,7 @@
-using System.Text;
-using Contracts;
 using Microsoft.KernelMemory;
+using SharpLlama.Contracts;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 public sealed class RagDiagnosticsCollector : IRagDiagnosticsCollector
 {

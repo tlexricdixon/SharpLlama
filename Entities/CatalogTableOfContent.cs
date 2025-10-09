@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Entities;
+namespace SharpLlama.Entities;
 
 public partial class CatalogTableOfContent
 {

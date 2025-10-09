@@ -1,13 +1,13 @@
 #nullable enable
-using System.Diagnostics;
-using Contracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;      // Requires FrameworkReference Microsoft.AspNetCore.App
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Options;
+using SharpLlama.Contracts;
+using System.Diagnostics;
 
-namespace Infrastructure;
+namespace SharpLlama.Infrastructure;
 
 public sealed class CustomProblemDetailsFactory : ProblemDetailsFactory
 {

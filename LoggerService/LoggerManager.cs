@@ -1,8 +1,8 @@
-﻿using Contracts;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
+using SharpLlama.Contracts;
 
 
-namespace LoggerService
+namespace SharpLlama.LoggerService
 {
     public class LoggerManager(ILogger<LoggerManager> logger) : ILoggerManager
     {

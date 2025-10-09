@@ -1,4 +1,4 @@
-﻿namespace Contracts;
+﻿namespace SharpLlama.Contracts;
 
 public interface ILoggerManager
 {

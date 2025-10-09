@@ -1,5 +1,5 @@
+using SharpLlama.Contracts;
 using System.Diagnostics;
-using Contracts;
 
 namespace SharpLlama.Middleware;
 

@@ -1,8 +1,6 @@
-using ChatService;
-using Contracts;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using System.IO;
+using Microsoft.AspNetCore.Mvc;
+using SharpLlama.Contracts;
 
 namespace SharpLlama.Controllers;
 
@@ -51,4 +49,3 @@ public class WarmupController : ControllerBase
         }
     }
 }
-        

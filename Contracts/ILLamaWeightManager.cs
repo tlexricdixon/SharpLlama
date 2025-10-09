@@ -1,7 +1,7 @@
 using LLama;
 using LLama.Common;
 
-namespace Contracts;
+namespace SharpLlama.Contracts;
 
 public interface ILLamaWeightManager : IDisposable
 {

@@ -1,22 +1,17 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using ChatService.Plugins;
-using Contracts;
-using Infrastructure;
 using LLama;
 using LLama.Common;
 using LLama.Sampling;
 using Microsoft.Extensions.Options;
-using Microsoft.SemanticKernel;
 using Microsoft.KernelMemory;
+using Microsoft.SemanticKernel;
+using SharpLlama.ChatService;
+using SharpLlama.Contracts; // Added for quantum-inspired parallel aggregation
+using SharpLlama.Infrastructure;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text;
 using static LLama.LLamaTransforms;
-using System.Collections.Concurrent; // Added for quantum-inspired parallel aggregation
 
 namespace ChatService
 {
@@ -85,7 +80,7 @@ namespace ChatService
             _cache = cache ?? new NullChatResponseCache();
             _metrics = metrics ?? new NullChatMetrics();
             _structuredEmployeeQueryService = structuredEmployeeQueryService;
-            _diagCollector = diagnosticsCollector ?? new NullRagDiagnosticsCollector();
+            _diagCollector = diagnosticsCollector != null ? diagnosticsCollector : new NullRagDiagnosticsCollector();
 
             _modelOptions = (modelOptions ?? throw new ArgumentNullException(nameof(modelOptions))).Value;
             _chatOptions = (chatOptions ?? throw new ArgumentNullException(nameof(chatOptions))).Value;
@@ -772,7 +767,7 @@ namespace ChatService
         private static string GetLastUserMessage(ChatHistory history)
             => history.Messages.LastOrDefault(m => m.AuthorRole == AuthorRole.User)?.Content ?? string.Empty;
 
-            private static string ResolveModelPath(string configuredPath)
+        private static string ResolveModelPath(string configuredPath)
         {
             if (string.IsNullOrWhiteSpace(configuredPath))
                 throw new ArgumentException("Model path empty.", nameof(configuredPath));

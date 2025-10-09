@@ -1,6 +1,6 @@
-using Entities;
-using Entities.Validation;
 using FluentAssertions;
+using SharpLlama.Entities;
+using SharpLlama.Entities.Validation;
 using Xunit;
 
 namespace SharpLlama.Tests.Validation;

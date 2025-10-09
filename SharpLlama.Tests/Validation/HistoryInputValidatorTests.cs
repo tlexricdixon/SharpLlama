@@ -1,6 +1,6 @@
-using Entities;
-using Entities.Validation;
 using FluentAssertions;
+using SharpLlama.Entities;
+using SharpLlama.Entities.Validation;
 using Xunit;
 
 namespace SharpLlama.Tests.Validation;
@@ -37,7 +37,7 @@ public class HistoryInputValidatorTests
     {
         var input = new HistoryInput
         {
-            Messages = [ new() { Role = "bad", Content = "Hi" } ]
+            Messages = [new() { Role = "bad", Content = "Hi" }]
         };
         var result = _validator.Validate(input);
         result.IsValid.Should().BeFalse();

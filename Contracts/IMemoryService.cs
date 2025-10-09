@@ -1,6 +1,6 @@
 using Microsoft.KernelMemory;
 
-namespace Contracts;
+namespace SharpLlama.Contracts;
 
 public interface IMemoryService
 {

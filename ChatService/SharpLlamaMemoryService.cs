@@ -1,7 +1,7 @@
-using Contracts;
 using Microsoft.KernelMemory;
+using SharpLlama.Contracts;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 public class SharpLlamaMemoryService(IKernelMemory memory, ILoggerManager logger) : IMemoryService
 {

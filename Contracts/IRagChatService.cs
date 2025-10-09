@@ -1,7 +1,7 @@
 using LLama.Common;
 using System.Threading;
 
-namespace Contracts;
+namespace SharpLlama.Contracts;
 
 public interface IRagChatService : IStatelessChatService
 {

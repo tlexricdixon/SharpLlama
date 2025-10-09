@@ -1,9 +1,9 @@
-using Contracts;
 using Microsoft.Extensions.Caching.Memory;
+using SharpLlama.Contracts;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 /// <summary>
 /// Provides in-memory caching for chat responses, keyed by a hashed representation

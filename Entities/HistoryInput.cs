@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Entities;
+namespace SharpLlama.Entities;
 
 public sealed class HistoryInput
 {

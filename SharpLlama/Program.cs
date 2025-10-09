@@ -1,7 +1,4 @@
-using Azure;
 using ChatService;
-using Contracts;
-using Entities.Validation;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
@@ -15,10 +12,12 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Polly;
 using Polly.Timeout;
-using ServiceExtentions;
-using Infrastructure;
+using SharpLlama.Contracts;
+using SharpLlama.Entities.Validation;
+using SharpLlama.Infrastructure;
 using SharpLlama.Middleware;
 using SharpLlama.Security;
+using SharpLlama.ServiceExtentions;
 using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -298,7 +297,8 @@ app.UseCors("Frontend");
 // Prometheus scrape endpoint (default path /metrics)
 app.MapPrometheusScrapingEndpoint("/metrics");
 
-app.MapGet("/", () => "Welcome to the Chat API!");
+// Moved API welcome off "/" to avoid conflict with Blazor root page
+app.MapGet("/api", () => "Welcome to the Chat API!");
 app.MapControllers();
 
 await app.RunAsync();

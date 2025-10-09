@@ -1,6 +1,5 @@
+using SharpLlama.Contracts;
 using System.Diagnostics;
-using System.Text.Json;
-using Contracts;
 
 namespace SharpLlama.Middleware;
 

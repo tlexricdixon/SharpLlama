@@ -1,4 +1,4 @@
-﻿namespace Entities;
+﻿namespace SharpLlama.Entities;
 
 public partial class ProductVendor
 {

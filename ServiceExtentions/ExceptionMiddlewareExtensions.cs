@@ -11,17 +11,14 @@
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
-using System.Net;
-
-using Contracts;
-
 using Entities;
-
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using SharpLlama.Contracts;
+using System.Net;
 
-namespace ServiceExtentions
+namespace SharpLlama.ServiceExtentions
 {
     /// <summary>
     /// Class ExceptionMiddlewareExtensions.
@@ -43,7 +40,7 @@ namespace ServiceExtentions
                     context.Response.ContentType = "application/json";
 
                     var contextFeature = context.Features.Get<IExceptionHandlerFeature>();
-                    if(contextFeature != null)
+                    if (contextFeature != null)
                     {
                         logger.LogError($"Something went wrong: {contextFeature.Error}");
                         await context.Response.WriteAsync(new ErrorDetails()

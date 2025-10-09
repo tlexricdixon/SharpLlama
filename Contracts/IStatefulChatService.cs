@@ -1,7 +1,8 @@
 ﻿using Entities;
+using SharpLlama.Entities;
 using System.Runtime.CompilerServices;
 
-namespace Contracts
+namespace SharpLlama.Contracts
 {
     public interface IStatefulChatService
     {

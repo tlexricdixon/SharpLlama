@@ -1,8 +1,8 @@
-using ChatService;
-using Contracts;
-using Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SharpLlama.ChatService;
+using SharpLlama.Contracts;
+using SharpLlama.Entities;
 using System.Diagnostics;
 
 namespace SharpLlama.Controllers;

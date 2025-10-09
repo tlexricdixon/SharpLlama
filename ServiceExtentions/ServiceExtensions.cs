@@ -1,15 +1,15 @@
-﻿using ChatService;
-using ChatService.Plugins;
-using Contracts;
-using Entities;
-using Infrastructure;
-using LoggerService;
+﻿using ChatService.Plugins;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options; // added for IOptions<T>
+using Microsoft.Extensions.Options;
+using SharpLlama.ChatService;
+using SharpLlama.Contracts;
+using SharpLlama.Entities;
+using SharpLlama.Infrastructure;
+using SharpLlama.LoggerService; // added for IOptions<T>
 
-namespace ServiceExtentions;
+namespace SharpLlama.ServiceExtentions;
 
 public static class ServiceExtensions
 {

@@ -1,6 +1,6 @@
 ﻿using LLama.Common;
 
-namespace Contracts;
+namespace SharpLlama.Contracts;
 
 public interface IStatelessChatService : IDisposable
 {

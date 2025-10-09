@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-namespace Entities;
+namespace SharpLlama.Entities;
 
 public partial class NorthwindStarterContext : DbContext
 {

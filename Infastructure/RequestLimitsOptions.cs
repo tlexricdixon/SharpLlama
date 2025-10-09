@@ -1,4 +1,4 @@
-namespace Infrastructure;
+namespace SharpLlama.Infrastructure;
 
 public sealed class RequestLimitsOptions
 {

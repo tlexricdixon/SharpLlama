@@ -1,5 +1,5 @@
-using Contracts;
 using Microsoft.SemanticKernel;
+using SharpLlama.Contracts;
 using System.ComponentModel;
 
 namespace ChatService.Plugins;

@@ -1,7 +1,7 @@
 using Microsoft.Data.Sqlite;
 using System.Text.Json;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 // Adjust names to your real schema.
 public sealed class SqliteVectorStore

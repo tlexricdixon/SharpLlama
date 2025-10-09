@@ -1,5 +1,5 @@
-﻿using Contracts;
-using Infrastructure;
+﻿using SharpLlama.Contracts;
+using SharpLlama.Infrastructure;
 using LLama;
 using LLama.Common;
 using LLama.Sampling;
@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 public sealed class StatefulChatService : IDisposable, IStatefulChatService
 {

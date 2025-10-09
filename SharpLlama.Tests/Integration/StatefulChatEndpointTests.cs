@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Entities;
 using FluentAssertions;
+using SharpLlama.Entities;
 using Xunit;
 
 namespace SharpLlama.Tests.Integration;

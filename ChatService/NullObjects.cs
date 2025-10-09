@@ -1,6 +1,6 @@
-using Contracts;
+using SharpLlama.Contracts;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 internal class NullChatResponseCache : IChatResponseCache
 {

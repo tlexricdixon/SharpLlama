@@ -1,12 +1,12 @@
-﻿using Contracts;
-using LLama;
+﻿using LLama;
 using LLama.Common;
 using Microsoft.Extensions.Configuration;
+using SharpLlama.Contracts;
+using System.Diagnostics;
 using System.Text;
 using static LLama.LLamaTransforms;
-using System.Diagnostics;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 public class StatelessChatService : IStatelessChatService, IDisposable
 {

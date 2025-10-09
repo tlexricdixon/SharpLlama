@@ -1,6 +1,6 @@
 using FluentValidation;
 
-namespace Entities.Validation;
+namespace SharpLlama.Entities.Validation;
 
 public sealed class HistoryInputValidator : AbstractValidator<HistoryInput>
 {

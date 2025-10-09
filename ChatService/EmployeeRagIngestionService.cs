@@ -1,11 +1,11 @@
-using Contracts;
-using Entities;
 using Microsoft.EntityFrameworkCore;
+using SharpLlama.Contracts;
+using SharpLlama.Entities;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using System.Diagnostics;
 
-namespace ChatService;
+namespace SharpLlama.ChatService;
 
 /// <summary>
 /// Service responsible for ingesting employee data into a vector or memory store for RAG (Retrieval-Augmented Generation) scenarios.

@@ -1,7 +1,7 @@
-using Contracts;
-using Microsoft.SemanticKernel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.SemanticKernel;
+using SharpLlama.Contracts;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
 
