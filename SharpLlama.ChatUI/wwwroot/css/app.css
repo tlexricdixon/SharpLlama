@@ -1,0 +1,10 @@
+body { font-family: system-ui, Arial, sans-serif; margin: 1rem; }
+.config label { margin-right: 1rem; display:inline-block; }
+.chat-window { border: 1px solid #ccc; padding: .5rem; height: 400px; overflow-y: auto; background:#fafafa; }
+.msg { margin-bottom: .5rem; }
+.msg.user { color:#004085; }
+.msg.assistant { color:#155724; }
+textarea { width: 100%; resize: vertical; }
+.ok { color: green; margin-left:.5rem; }
+.err { color: darkred; margin-left:.5rem; }
+.status { font-style: italic; color: #555; }

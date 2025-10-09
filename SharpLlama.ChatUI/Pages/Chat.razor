@@ -1,0 +1,101 @@
+@page "/"
+@inject ChatService Chats
+@inject ChatState State
+
+<h1>SharpLlama Chat</h1>
+
+<div class="config">
+    <label>API Base URL:
+        <input @bind="_baseUrl" placeholder="https://localhost:5001" />
+    </label>
+    <label>API Key:
+        <input @bind="_apiKey" />
+    </label>
+    <button @onclick="ApplyConfig">Apply</button>
+    <button @onclick="Warmup" disabled="@_warming">Warmup</button>
+    @if(_warmupOk is true) { <span class="ok">Warmup OK</span> }
+    @if(_warmupOk is false){ <span class="err">Warmup failed</span> }
+</div>
+
+<div class="chat-window">
+    @foreach (var m in State.Messages)
+    {
+        <div class="msg @(m.Role)">
+            <b>@m.Role:</b>
+            <span>@m.Content</span>
+        </div>
+    }
+</div>
+
+<form @onsubmit="OnSend" @onsubmit:preventDefault>
+    <textarea @bind="_prompt" rows="3" placeholder="Type your prompt..." />
+    <div>
+        <button disabled="@_sending">Send</button>
+        <button type="button" @onclick="Clear">Clear</button>
+    </div>
+</form>
+
+@if(!string.IsNullOrWhiteSpace(_status))
+{
+    <p class="status">@_status</p>
+}
+
+@code {
+    private string _baseUrl = "https://localhost:5001";
+    private string? _apiKey;
+    private string _prompt = "";
+    private bool _sending;
+    private bool _warming;
+    private bool? _warmupOk;
+    private string? _status;
+
+    private void ApplyConfig()
+    {
+        Chats.Configure(_baseUrl, _apiKey);
+        _status = "Configuration applied.";
+    }
+
+    private async Task Warmup()
+    {
+        try
+        {
+            _warming = true;
+            _warmupOk = await Chats.WarmupAsync();
+        }
+        catch
+        {
+            _warmupOk = false;
+        }
+        finally
+        {
+            _warming = false;
+        }
+    }
+
+    private async Task OnSend()
+    {
+        if (string.IsNullOrWhiteSpace(_prompt)) return;
+        _sending = true;
+        var toSend = _prompt;
+        _prompt = "";
+        try
+        {
+            await Chats.SendAsync(toSend);
+        }
+        catch (Exception ex)
+        {
+            State.Add("assistant", $"[Client Error] {ex.Message}");
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Clear()
+    {
+        State.Clear();
+        _status = "Cleared.";
+    }
+}

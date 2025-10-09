@@ -1,0 +1,15 @@
+# Ignore the entire Models folder (case-insensitive variations)
+[Mm]odels/
+[Mm]odels/**
+
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# (Optional) If using per-platform artifacts
+# */[Bb]in/
+# */[Oo]bj/
+
+# If you only want to ignore contents but keep the Models folder, use:
+# [Mm]odels/*
+# ![Mm]odels/.gitkeep
