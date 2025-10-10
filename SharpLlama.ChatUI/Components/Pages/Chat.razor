@@ -1,6 +1,21 @@
 @page "/"
 @inject ChatService Chats
 @inject ChatState State
+@rendermode InteractiveServer
+@* PSEUDOCODE PLAN
+- Goal: Fix handler that doesn't fire when button is clicked.
+- Issues observed:
+  - `textarea` is self-closed; HTML non-void element must have explicit closing tag in Razor/Blazor. This can break event handling.
+  - Form relies on `@onsubmit`; switching to explicit button `@onclick` avoids submit-related issues and is more reliable.
+  - Ensure non-submit buttons have `type="button"` so they don't trigger form submit.
+  - Optionally force re-render after config apply for immediate status update.
+
+- Changes:
+  1) Replace self-closing `<textarea />` with `<textarea></textarea>` while keeping `@bind`.
+  2) Remove `@onsubmit` from `<form>` and wire `Send` to `@onclick="OnSend"` with `type="button"`.
+  3) Add `type="button"` to `Apply` and `Warmup` buttons to prevent unintended form submits.
+  4) Optionally call `StateHasChanged()` after applying config (not strictly necessary, but safe).
+*@>
 
 <h1>SharpLlama Chat</h1>
 
@@ -11,8 +26,8 @@
     <label>API Key:
         <input @bind="_apiKey" />
     </label>
-    <button @onclick="ApplyConfig">Apply</button>
-    <button @onclick="Warmup" disabled="@_warming">Warmup</button>
+    <button type="button" @onclick="ApplyConfig">Apply</button>
+    <button type="button" @onclick="Warmup" disabled="@_warming">Warmup</button>
     @if(_warmupOk is true) { <span class="ok">Warmup OK</span> }
     @if(_warmupOk is false){ <span class="err">Warmup failed</span> }
 </div>
@@ -27,10 +42,10 @@
     }
 </div>
 
-<form @onsubmit="OnSend" @onsubmit:preventDefault>
-    <textarea @bind="_prompt" rows="3" placeholder="Type your prompt..." />
+<form>
+    <textarea @bind="_prompt" rows="3" placeholder="Type your prompt..."></textarea>
     <div>
-        <button disabled="@_sending">Send</button>
+        <button type="button" disabled="@_sending" @onclick="OnSend">Send</button>
         <button type="button" @onclick="Clear">Clear</button>
     </div>
 </form>
@@ -53,6 +68,7 @@
     {
         Chats.Configure(_baseUrl, _apiKey);
         _status = "Configuration applied.";
+        StateHasChanged();
     }
 
     private async Task Warmup()

@@ -24,9 +24,9 @@ public sealed class ChatApiClient
 
     public async Task<string> SendAsync(string prompt, CancellationToken ct = default)
     {
-        var payload = new { prompt };
+        var payload = new { Text = prompt };
         using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-        using var resp = await _http.PostAsync("api/chat", content, ct);
+        using var resp = await _http.PostAsync("api/StatefulChat/Send", content, ct);
         if (!resp.IsSuccessStatusCode)
         {
             var error = await resp.Content.ReadAsStringAsync(ct);

@@ -1,3 +1,5 @@
+using SharpLlama.ChatUI;
+using SharpLlama.ChatUI.Components;
 using SharpLlama.ChatUI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,11 +25,11 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+
 app.UseAntiforgery();
 
 app.MapStaticAssets();
-// IMPORTANT: Map the document component defined in Components/App.razor
-app.MapRazorComponents<SharpLlama.ChatUI.Components.App>()
+app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
