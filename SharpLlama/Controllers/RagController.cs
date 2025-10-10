@@ -47,4 +47,48 @@ public class RagController(IRagChatService ragChatService, IMemoryService memory
         catch (Exception ex)
         { _logger.LogError($"RagController.Chat error: {ex.Message}"); return this.ServerErrorProblem(); }
     }
+
+    // NEW: list document ids present in AI_ContextChunks
+    [HttpGet("memory/documents")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetDocumentIds(CancellationToken ct)
+    {
+        try
+        {
+            var ids = await _memoryService.GetDocumentIdsAsync().ConfigureAwait(false);
+            return Ok(new { count = ids.Count(), ids });
+        }
+        catch (OperationCanceledException) { return this.CanceledProblem(); }
+        catch (Exception ex) { _logger.LogError($"GetDocumentIds error: {ex.Message}"); return this.ServerErrorProblem(); }
+    }
+
+    // NEW: search chunks with a free-text query (pulls text like your Adatum sample)
+    [HttpGet("memory/search")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SearchMemory([FromQuery] string query, [FromQuery] int limit = 5, [FromQuery] double minRelevance = 0.4, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return this.ValidationProblem("Query is required.");
+        try
+        {
+            var results = await _memoryService.SearchAsync(query, limit, minRelevance).ConfigureAwait(false);
+            var payload = results.Select(c => new
+            {
+                source = c.SourceName,
+                partitions = (c.Partitions ?? Enumerable.Empty<Microsoft.KernelMemory.Citation.Partition>())
+                    .Select(p => new { number = p.PartitionNumber, relevance = p.Relevance, text = p.Text })
+            }).ToList();
+
+            return Ok(new
+            {
+                query,
+                limit,
+                minRelevance,
+                count = payload.Count,
+                results = payload
+            });
+        }
+        catch (OperationCanceledException) { return this.CanceledProblem(); }
+        catch (Exception ex) { _logger.LogError($"SearchMemory error: {ex.Message}"); return this.ServerErrorProblem(); }
+    }
 }

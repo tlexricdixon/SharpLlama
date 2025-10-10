@@ -7,20 +7,13 @@ using System.Text;
 
 namespace ChatService.Plugins;
 
-public class RagPlugin : ISemanticKernelPlugin
+public class RagPlugin(IMemoryService memoryService, ILoggerManager logger, IRagDiagnosticsCollector? diagnosticsCollector = null) : ISemanticKernelPlugin
 {
-    private readonly IMemoryService _memoryService;
-    private readonly ILoggerManager _logger;
-    private readonly IRagDiagnosticsCollector _diag; // added
+    private readonly IMemoryService _memoryService = memoryService ?? throw new ArgumentNullException(nameof(memoryService));
+    private readonly ILoggerManager _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IRagDiagnosticsCollector _diag = diagnosticsCollector ?? new NullRagDiagnosticsCollector(); // added
 
     public string Name => "RagPlugin";
-
-    public RagPlugin(IMemoryService memoryService, ILoggerManager logger, IRagDiagnosticsCollector? diagnosticsCollector = null)
-    {
-        _memoryService = memoryService ?? throw new ArgumentNullException(nameof(memoryService));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _diag = diagnosticsCollector ?? new NullRagDiagnosticsCollector();
-    }
 
     [KernelFunction("search_memory")]
     [Description("Search for relevant information in the knowledge base")]
