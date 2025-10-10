@@ -112,11 +112,10 @@ public static class MemoryServiceExtensions
             return memoryBuilder.Build();
         });
 
-        services.AddScoped<IMemoryService, SharpLlamaMemoryService>();
+        // FIX: register IMemoryService so RagChatService and EmployeeRagIngestionService can be constructed
+        services.AddScoped<IMemoryService, SqlRagMemoryStore>();
 
-        // ADD THIS: register the structured query service (scoped to align with DbContext)
-        services.AddScoped<StructuredEmployeeQueryService>();
-
+        // Optional: IRagChatService is also registered in Program.cs; consider removing one to avoid duplication.
         services.AddScoped<IRagChatService, RagChatService>();
 
         return services;
