@@ -1,0 +1,22 @@
+﻿@inherits CiviTools.Models.UiInputBase<string>
+
+<div class="ui-textfield @EffectiveCssClass" style="grid-column: span @EffectiveCols;">
+    @if (!string.IsNullOrWhiteSpace(EffectiveTitle))
+    {
+        <label class="form-label">@EffectiveTitle</label>
+    }
+
+    <input type="text"
+           class="form-control"
+           placeholder="@Placeholder"
+           value="@Value"
+           disabled="@Disabled"
+           @oninput="OnInput" />
+
+    @if (!string.IsNullOrWhiteSpace(Help))
+    {
+        <div class="form-text">@Help</div>
+    }
+</div>
+
+

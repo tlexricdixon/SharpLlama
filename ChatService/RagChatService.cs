@@ -554,10 +554,9 @@ namespace ChatService
                 foreach (var (expansion, citation) in citationBag)
                 {
                     var parts = citation.Partitions ?? Enumerable.Empty<Citation.Partition>();
-                    foreach (var p in parts)
+                    foreach (var text in parts.Select(p => p.Text).Where(t => !string.IsNullOrWhiteSpace(t)))
                     {
-                        if (string.IsNullOrWhiteSpace(p.Text)) continue;
-                        var key = p.Text.Trim();
+                        var key = text.Trim();
                         if (!partitionGroups.TryGetValue(key, out var qp))
                         {
                             qp = new QuantumPartitionScore { Text = key };
@@ -627,7 +626,7 @@ namespace ChatService
             public HashSet<string> Expansions { get; } = new(StringComparer.OrdinalIgnoreCase);
         }
 
-        private IEnumerable<string> GenerateQuantumExpansions(string query)
+        private static IEnumerable<string> GenerateQuantumExpansions(string query)
         {
             // Base
             yield return query;

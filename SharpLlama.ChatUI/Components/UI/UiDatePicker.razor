@@ -1,0 +1,40 @@
+﻿
+@inherits SharpLlama.ChatUI.CiviTools.Models.UiInputBase<DateTime?>
+
+<div class="ui-date @EffectiveCssClass" style="grid-column: span @EffectiveCols;">
+    @if (!string.IsNullOrWhiteSpace(EffectiveTitle))
+    {
+        <label class="form-label">@EffectiveTitle</label>
+    }
+
+    <input type="date"
+           class="form-control"
+           value="@(Value.HasValue? Value.Value.ToString("yyyy-MM-dd") : string.Empty)"
+           min="@(Min.HasValue? Min.Value.ToString("yyyy-MM-dd") : null)"
+           max="@(Max.HasValue? Max.Value.ToString("yyyy-MM-dd") : null)"
+           disabled="@Disabled"
+           @onchange="OnChange" />
+
+    @if (!string.IsNullOrWhiteSpace(Help))
+    {
+        <div class="form-text">@Help</div>
+    }
+
+    @if (EditContext is not null && ValueExpression is not null)
+    {
+        <ValidationMessage For="ValueExpression" />
+    }
+</div>
+
+@code {
+    [Parameter] public DateTime? Min { get; set; }
+    [Parameter] public DateTime? Max { get; set; }
+
+    private async Task OnChange(ChangeEventArgs e)
+    {
+        var s = e?.Value?.ToString();
+        if (DateTime.TryParse(s, out var dt)) await SetCurrentValueAsync(dt.Date);
+        else await SetCurrentValueAsync(null);
+    }
+}
+

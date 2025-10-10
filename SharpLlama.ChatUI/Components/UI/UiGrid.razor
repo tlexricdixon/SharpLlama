@@ -1,0 +1,67 @@
+﻿@* CiviTools/Components/UI/UiGrid.razor *@
+@using System.Reflection
+
+@code {
+    // parameters expected by your property panel / param bag
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public int? Cols { get; set; }
+    [Parameter] public string? CssClass { get; set; }
+    [Parameter] public IEnumerable<object>? Rows { get; set; }
+
+    // optional: custom cell rendering
+    [Parameter] public RenderFragment<(object Row, PropertyInfo Col)>? CellTemplate { get; set; }
+
+    // effective values / guards
+    private string EffectiveTitle => string.IsNullOrWhiteSpace(Title) ? "Grid" : Title!;
+    private int EffectiveCols => (Cols is int c && c > 0) ? c : 3;
+    private string EffectiveCssClass => CssClass ?? string.Empty;
+    private IEnumerable<object> EffectiveRows => Rows ?? Array.Empty<object>();
+
+    private IReadOnlyList<PropertyInfo> _columns = Array.Empty<PropertyInfo>();
+
+    protected override void OnParametersSet()
+    {
+        var first = EffectiveRows.FirstOrDefault();
+        _columns = first?.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                   ?? Array.Empty<PropertyInfo>();
+    }
+}
+
+<div class="ui-grid @EffectiveCssClass" style="grid-column: span @EffectiveCols;">
+    @if (!string.IsNullOrWhiteSpace(EffectiveTitle))
+    {
+        <h4 class="mb-2">@EffectiveTitle</h4>
+    }
+
+    @if (!EffectiveRows.Any())
+    {
+        <div class="text-muted">No data.</div>
+    }
+    else
+    {
+        <div style="display:grid;grid-template-columns:repeat(@EffectiveCols,minmax(0,1fr));gap:.75rem;">
+            @foreach (var row in EffectiveRows)
+            {
+                <div class="ui-grid__cell card p-2">
+                    @if (CellTemplate is not null)
+                    {
+                        foreach (var col in _columns)
+                        {
+                            @CellTemplate((row, col))
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var col in _columns)
+                        {
+                            <div class="mb-1">
+                                <strong>@col.Name:</strong>
+                                <span>@(col.GetValue(row) ?? "")</span>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>

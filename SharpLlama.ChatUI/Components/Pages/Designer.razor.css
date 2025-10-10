@@ -1,0 +1,56 @@
+﻿    
+.designer-grid {
+    display: grid;
+    grid-template-columns: 260px 1fr 320px;
+    gap: 16px;
+}
+
+.panel {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.canvas {
+    border: 2px dashed #bbb;
+    border-radius: 10px;
+    padding: 12px;
+    min-height: 300px;
+}
+.canvas-item {
+    padding: .5rem;
+    margin-bottom: .5rem;
+    border: 1px dashed transparent;
+    border-radius: .5rem;
+}
+
+    .canvas-item.selected {
+        border-color: #0d6efd33;
+        background: #0d6efd0d;
+    }
+
+    .canvas-item.drag-target {
+        border-color: #6c757d;
+        background: #f8f9fa;
+    }
+
+
+.node {
+    border: 1px solid #e5e5e5;
+    padding: 8px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    background: #fafafa;
+}
+
+    .node.selected {
+        outline: 2px solid #2d6cdf;
+        background: #eef4ff;
+    }
+
+    .node.drop-hint {
+        outline: 2px dashed #2d6cdf;
+    }
+.toolbar button {
+    margin-right: 6px;
+}
