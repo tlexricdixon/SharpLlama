@@ -1,3 +1,4 @@
+using SharpLlama.ChatUi.Service;
 using SharpLlama.ChatUI;
 using SharpLlama.ChatUI.Components;
 using SharpLlama.ChatUI.Services;
@@ -13,7 +14,7 @@ builder.Services.AddHttpClient<ChatApiClient>();
 
 builder.Services.AddScoped<ChatState>();
 builder.Services.AddScoped<ChatService>();
-
+builder.Services.AddSingleton<ComponentRegistry>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -32,4 +33,4 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-app.Run();
+await app.RunAsync();

@@ -1,0 +1,120 @@
+﻿@page "/designer"
+
+@inject ComponentRegistry Registry
+@rendermode InteractiveServer
+
+<PageTitle>Designer</PageTitle>
+
+<div class="designer-grid">
+  <!-- Toolbox -->
+  <section class="panel">
+    <h5 class="mb-3">Toolbox</h5>
+    @foreach (var d in Registry.All())
+    {
+        <button type="button"
+                class="btn btn-outline-primary btn-sm w-100 mb-2"
+                @onclick="() => AddComponent(d)">
+            @d.DisplayName
+        </button>
+    }
+    <hr />
+    <div class="toolbar">
+        <button class="btn btn-outline-secondary btn-sm" disabled="@(_selected is null)" @onclick="MoveUp">Move Up</button>
+        <button class="btn btn-outline-secondary btn-sm" disabled="@(_selected is null)" @onclick="MoveDown">Move Down</button>
+        <button class="btn btn-outline-danger btn-sm" disabled="@(_selected is null)" @onclick="RemoveSelected">Remove</button>
+    </div>
+  </section>
+    <!-- Canvas -->
+    <section class="panel">
+        <h5 class="mb-3">Canvas</h5>
+
+        <div class="canvas">
+            @if (!Canvas.Any())
+            {
+                <div class="text-muted">Add components from the toolbox…</div>
+            }
+            else
+            {
+                @foreach (var pair in Canvas.Select((n, i) => (node: n, index: i)))
+                {
+                    var node = pair.node;
+                    var index = pair.index;
+
+                    <div class="canvas-item @(GetItemCss(index))"
+                         draggable="true"
+                         @ondragstart="(() => OnDragStart(index))"
+                         @ondragover="(() => OnDragOver(index))" @ondragover:preventDefault
+                         @ondragenter="(() => OnDragOver(index))" @ondragenter:preventDefault
+                         @ondrop="(() => OnDrop(index))" @ondrop:preventDefault
+                         @ondragleave="(() => OnDragLeave(index))"
+                         @onclick="(() => Select(node))"
+                         @key="node.Component.Id">
+
+                        <DynamicComponent Type="node.Component.ComponentType"
+                                          Parameters="node.Component.Params"
+                                          @key="node.Component.Id" />
+                    </div>
+                }
+            }
+        </div>
+    </section>
+
+
+
+    <!-- Properties -->
+    <section class="panel">
+        <h5 class="mb-3">Properties</h5>
+
+        @if (_selected is null)
+        {
+            <div class="text-muted">Select a component on the canvas.</div>
+        }
+        else
+        {
+            var bag = _selected.Component.Params;
+            foreach (var pm in _selected.Component.GetDesignProps())
+            {
+                var current = pm.Getter(bag);
+
+                <div class="mb-2">
+                    <label class="form-label">@pm.Label</label>
+                    @switch (pm.Type)
+                    {
+                        case "string":
+                            <input class="form-control"
+                                   value="@Convert.ToString(current)"
+                                   @onchange="(e => SetProp(pm, e.Value))" />
+                            break;
+
+                        case "int":
+                            <input type="number" class="form-control"
+                                   value="@Convert.ToString(current)"
+                                   @onchange="(e => SetProp(pm, e.Value))" />
+                            break;
+
+                        case "bool":
+                            <input type="checkbox" class="form-check-input"
+                                   checked="@(current is true)"
+                                   @onchange="(e => SetProp(pm, e.Value))" />
+                            break;
+
+                        case "date":
+                            <input type="date" class="form-control"
+                                   value="@(current is DateTime dt ? dt.ToString("yyyy-MM-dd") : string.Empty)"
+                                   @onchange="(e => SetProp(pm, e.Value))" />
+                            break;
+
+                        default:
+                            <div class="text-muted">Unsupported editor: @pm.Type</div>
+                            break;
+                    }
+                </div>
+            }
+        }
+    </section>
+</div>
+
+<hr class="my-4" />
+
+<h5>Live Preview</h5>
+<FormHost Nodes="Canvas" />

@@ -270,17 +270,19 @@ public class ChatServicePool : IChatServicePool, IDisposable
 
     private static bool IsServiceDisposed(object service)
     {
-        try
+        // S3011: Avoid accessibility bypass via reflection.
+        // Instead, check for IDisposable and use a public property or method if available.
+        if (service is IDisposable disposable)
         {
-            var disposedField = service.GetType().GetField("_disposed",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            return disposedField?.GetValue(service) as bool? ?? false;
+            // If the service has a public IsDisposed property, use it.
+            var isDisposedProp = service.GetType().GetProperty("IsDisposed", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (isDisposedProp != null && isDisposedProp.PropertyType == typeof(bool))
+            {
+                return (bool)isDisposedProp.GetValue(service);
+            }
         }
-        catch
-        {
-            // If reflection fails, assume not disposed to avoid premature discard
-            return false;
-        }
+        // Fallback: assume not disposed
+        return false;
     }
 
     public void Dispose()
