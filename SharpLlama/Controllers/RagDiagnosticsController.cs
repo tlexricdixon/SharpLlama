@@ -10,9 +10,9 @@ namespace SharpLlama.Controllers;
 public class RagDiagnosticsController : ControllerBase
 {
     private readonly IRagDiagnosticsCollector _collector;
-    private readonly IMemoryService _memory;
+    private readonly IKragStore _memory;
 
-    public RagDiagnosticsController(IRagDiagnosticsCollector collector, IMemoryService memory)
+    public RagDiagnosticsController(IRagDiagnosticsCollector collector, IKragStore memory)
     {
         _collector = collector;
         _memory = memory;
@@ -50,21 +50,21 @@ public class RagDiagnosticsController : ControllerBase
         return Ok(shaped);
     }
 
-    [HttpGet("store/summary")]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetStoreSummary([FromQuery] bool includeIds = false, [FromQuery] int maxIds = 50)
-    {
-        if (maxIds < 0) maxIds = 0;
-        if (maxIds > 200) maxIds = 200;
+    //[HttpGet("store/summary")]
+    //[ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    //public async Task<IActionResult> GetStoreSummary([FromQuery] bool includeIds = false, [FromQuery] int maxIds = 50)
+    //{
+    //    if (maxIds < 0) maxIds = 0;
+    //    if (maxIds > 200) maxIds = 200;
 
-        var ids = await _memory.GetDocumentIdsAsync();
-        var list = ids.ToList();
-        var result = new
-        {
-            DocumentCount = list.Count,
-            ReturnedIds = includeIds ? list.Take(maxIds).ToList() : new List<string>(),
-            IncludedIdCount = includeIds ? Math.Min(maxIds, list.Count) : 0
-        };
-        return Ok(result);
-    }
+    //    var ids = await _memory.GetDocumentIdsAsync();
+    //    var list = ids.ToList();
+    //    var result = new
+    //    {
+    //        DocumentCount = list.Count,
+    //        ReturnedIds = includeIds ? list.Take(maxIds).ToList() : new List<string>(),
+    //        IncludedIdCount = includeIds ? Math.Min(maxIds, list.Count) : 0
+    //    };
+    //    return Ok(result);
+    //}
 }

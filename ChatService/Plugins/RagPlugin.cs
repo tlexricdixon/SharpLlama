@@ -7,9 +7,9 @@ using System.Text;
 
 namespace ChatService.Plugins;
 
-public class RagPlugin(IMemoryService memoryService, ILoggerManager logger, IRagDiagnosticsCollector? diagnosticsCollector = null) : ISemanticKernelPlugin
+public class RagPlugin(IKragStore ragStore, ILoggerManager logger, IRagDiagnosticsCollector? diagnosticsCollector = null) : ISemanticKernelPlugin
 {
-    private readonly IMemoryService _memoryService = memoryService ?? throw new ArgumentNullException(nameof(memoryService));
+    private readonly IKragStore _ragStore = ragStore ?? throw new ArgumentNullException(nameof(ragStore));
     private readonly ILoggerManager _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IRagDiagnosticsCollector _diag = diagnosticsCollector ?? new NullRagDiagnosticsCollector(); // added
 
@@ -23,89 +23,40 @@ public class RagPlugin(IMemoryService memoryService, ILoggerManager logger, IRag
         [Description("Minimum relevance score")] double minRelevance = 0.6)
     {
         var opId = Guid.NewGuid().ToString("N");
-        var opGuid = Guid.NewGuid(); // new Guid to tie diagnostics
         var sw = Stopwatch.StartNew();
 
         try
         {
-            _logger.LogDebug($"[RAG:{opId}] Enter SearchMemoryAsync (query='{TrimForLog(query)}', limit={limit}, minRelevance={minRelevance:F2})");
+            _logger.LogDebug($"[RAG:{opId}] Query='{query}' Limit={limit} MinRelevance={minRelevance:F2}");
 
-            // Basic validation
             if (string.IsNullOrWhiteSpace(query))
-            {
-                _logger.LogWarning($"[RAG:{opId}] Empty or null query provided.");
                 return "Query was empty. Please provide a search phrase.";
-            }
 
-            if (limit <= 0)
+            var results = await _ragStore.SearchAsync(query, limit);
+            if (results == null || !results.Any())
+                return "No relevant information found in the database.";
+
+            var sb = new StringBuilder("Relevant information from company database:\n\n");
+            int rank = 1;
+
+            foreach (var chunk in results.Take(limit))
             {
-                _logger.LogWarning($"[RAG:{opId}] Non-positive limit {limit} provided. Resetting to 5.");
-                limit = 5;
+                sb.AppendLine($"**{rank++}. {chunk.TableName}:{chunk.EntityName}**");
+                sb.AppendLine(chunk.Text);
+                sb.AppendLine();
             }
 
-            if (double.IsNaN(minRelevance) || minRelevance < 0.0 || minRelevance > 1.0)
-            {
-                _logger.LogWarning($"[RAG:{opId}] Invalid minRelevance {minRelevance}. Clamping to range 0.0 - 1.0.");
-                minRelevance = Math.Clamp(minRelevance, 0.0, 1.0);
-            }
-
-            var results = await _memoryService.SearchAsync(query, limit, minRelevance);
-            if (results is null)
-            {
-                _logger.LogWarning($"[RAG:{opId}] IMemoryService returned null result set.");
-                return "No relevant information found in the knowledge base.";
-            }
-
-            var materialized = results.ToList();
-            _logger.LogDebug($"[RAG:{opId}] Retrieved {materialized.Count} raw results.");
-
-            if (materialized.Count == 0)
-            {
-                return "No relevant information found in the knowledge base.";
-            }
-
-            // Diagnostics
-            _diag.AddRetrieval(opGuid, query, materialized, limit);
-
-            var sb = new StringBuilder();
-            sb.AppendLine("Relevant information from knowledge base:");
-            sb.AppendLine();
-
-            int emitted = 0;
-            foreach (var result in materialized.Take(limit))
-            {
-                emitted++;
-                var relevance = result.Partitions != null && result.Partitions.Any()
-                    ? result.Partitions.Max(p => p.Relevance)
-                    : 0.0f;
-
-                var topPartition = result.Partitions != null && result.Partitions.Any()
-                    ? result.Partitions.OrderByDescending(p => p.Relevance).First()
-                    : null;
-
-                sb.AppendLine($"**Source:** {result.SourceName ?? "Unknown"}");
-                sb.AppendLine($"**Relevance:** {relevance:F2}");
-                sb.AppendLine($"**Content:** {(topPartition?.Text ?? "(No content available)")}\n");
-            }
-
-            _logger.LogInfo($"[RAG:{opId}] Completed search. Returned {emitted} formatted results in {sw.ElapsedMilliseconds} ms.");
-
+            _logger.LogInfo($"[RAG:{opId}] Returned {results.Count()} rows in {sw.ElapsedMilliseconds}ms.");
             return sb.ToString();
-        }
-        catch (OperationCanceledException oce)
-        {
-            _logger.LogWarning($"[RAG:{opId}] Search was canceled: {oce.Message}");
-            return "Search was canceled.";
         }
         catch (Exception ex)
         {
-            _logger.LogError($"[RAG:{opId}] Error in RAG search: {ex}");
-            return "An error occurred while searching the knowledge base.";
+            _logger.LogError($"[RAG:{opId}] Exception: {ex}");
+            return "An error occurred while querying RAG memory.";
         }
         finally
         {
             sw.Stop();
-            _logger.LogDebug($"[RAG:{opId}] Exit SearchMemoryAsync (elapsed {sw.ElapsedMilliseconds} ms)");
         }
     }
 

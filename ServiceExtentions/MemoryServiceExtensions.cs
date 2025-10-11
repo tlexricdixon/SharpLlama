@@ -1,8 +1,9 @@
-using ChatService;
+using ChatService.Plugins;
 using LLama;
 using LLama.Common;
 using LLama.Native;
 using LLamaSharp.KernelMemory;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.KernelMemory;
@@ -32,7 +33,6 @@ public static class MemoryServiceExtensions
 
             var weightManager = serviceProvider.GetRequiredService<ILLamaWeightManager>();
             var logger = serviceProvider.GetService<ILoggerManager>(); // optional logging
-
 
             // Generation (and embeddings if same file) params
             var genParams = new ModelParams(mainModelPath)
@@ -105,22 +105,79 @@ public static class MemoryServiceExtensions
             if (embeddingWeights != null)
             {
                 logger?.LogInfo("KernelMemory: Separate embedding model loaded (distinct file).");
-                // If later you want to use separate embedding weights with KM, add:
-                // memoryBuilder.WithLLamaSharpDefaults(llamaConfig, embeddingWeights);
+                // To use separate embedding weights with KernelMemory in the future,
+                // add a second LLamaSharp defaults registration configured for embeddings.
             }
 
             return memoryBuilder.Build();
         });
-
-        // FIX: register IMemoryService so RagChatService and EmployeeRagIngestionService can be constructed
-        services.AddScoped<IMemoryService, SqlRagMemoryStore>();
-
-        // Optional: IRagChatService is also registered in Program.cs; consider removing one to avoid duplication.
         services.AddScoped<IRagChatService, RagChatService>();
+        services.AddScoped<ISemanticKernelPlugin, RagPlugin>();
+        services.AddScoped<IRagDiagnosticsCollector, RagDiagnosticsCollector>();
+        services.AddScoped<IEmployeeRagIngestionService, EmployeeRagIngestionService>();
+        services.AddScoped<StructuredEmployeeQueryService>();
 
         return services;
     }
+    public static IServiceCollection AddSqlRagWithLocalEmbeddings(this IServiceCollection services, IConfiguration config)
+    {
+        // Local embedder: look for model in the SharpLlama project's Models folder
+        services.AddSingleton<ILocalEmbedder>(sp =>
+        {
+            var fileName = config["EmbeddingModelFileName"] ?? "nomic-embed-text-v1.5.Q2_K.gguf";
 
+            // 1) Allow explicit override via configuration (EmbeddingModelPath)
+            var explicitPath = config["EmbeddingModelPath"];
+            if (!string.IsNullOrWhiteSpace(explicitPath))
+            {
+                var resolvedExplicit = ResolveModelPath(explicitPath);
+                if (!File.Exists(resolvedExplicit))
+                    throw new FileNotFoundException("Embedding model not found (EmbeddingModelPath).", resolvedExplicit);
+
+                return new LLamaSharpLocalEmbedder(resolvedExplicit, contextSize: 512, gpuLayers: 0);
+            }
+
+            // 2) Preferred: SharpLlama/Models/<file>
+            var candidate1 = ResolveModelPath(Path.Combine("SharpLlama", "Models", fileName));
+
+            // 3) Fallbacks: ./Models and BaseDirectory/Models
+            var candidate2 = ResolveModelPath(Path.Combine("Models", fileName));
+            var candidate3 = Path.Combine(AppContext.BaseDirectory, "Models", fileName);
+
+            string? modelPath = null;
+            if (File.Exists(candidate1)) modelPath = candidate1;
+            else if (File.Exists(candidate2)) modelPath = candidate2;
+            else if (File.Exists(candidate3)) modelPath = candidate3;
+
+            if (modelPath is null)
+            {
+                var attempts = new[]
+                {
+                    candidate1,
+                    candidate2,
+                    candidate3
+                };
+                throw new FileNotFoundException(
+                    "Embedding model not found in expected locations (SharpLlama/Models or ./Models).",
+                    string.Join(" | ", attempts));
+            }
+
+            // Adjust gpuLayers if CUDA build available
+            return new LLamaSharpLocalEmbedder(modelPath, contextSize: 512, gpuLayers: 0);
+        });
+
+        // SQL RAG store
+        services.AddScoped<IKragStore>(sp =>
+        {
+            var connStr = config.GetConnectionString("DefaultConnection")
+                          ?? config["ConnectionStrings:DefaultConnection"]
+                          ?? throw new InvalidOperationException("Database connection string not found.");
+            var embedder = sp.GetRequiredService<ILocalEmbedder>();
+            return new SqlRagMemoryStore(connStr, embedder);
+        });
+
+        return services;
+    }
     private static string ResolveModelPath(string configuredPath)
     {
         if (string.IsNullOrWhiteSpace(configuredPath))

@@ -1,8 +1,8 @@
-using ChatService;
-using Contracts;
 using FluentAssertions;
 using Microsoft.Extensions.Caching.Memory;
 using Moq;
+using SharpLlama.ChatService;
+using SharpLlama.Contracts;
 using Xunit;
 
 namespace SharpLlama.Tests.Caching;

@@ -3,17 +3,17 @@ using LLama;
 using LLama.Common;
 using LLama.Sampling;
 using Microsoft.Extensions.Options;
-using Microsoft.KernelMemory;
 using Microsoft.SemanticKernel;
 using SharpLlama.ChatService;
 using SharpLlama.Contracts; // Added for quantum-inspired parallel aggregation
+using SharpLlama.Entities;
 using SharpLlama.Infrastructure;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using static LLama.LLamaTransforms;
 
-namespace ChatService
+namespace SharpLlama.ChatService
 {
     public class RagChatService : IRagChatService, IDisposable
     {
@@ -21,7 +21,7 @@ namespace ChatService
         private static readonly ActivitySource s_activitySource = new("ChatService.RagChatService");
 
         private readonly ILoggerManager _logger;
-        private readonly IMemoryService _memoryService;
+        private readonly IKragStore _ragStore;
         private readonly IChatResponseCache _cache;
         private readonly IChatMetrics _metrics;
         private readonly StructuredEmployeeQueryService? _structuredEmployeeQueryService;
@@ -68,7 +68,7 @@ namespace ChatService
             IOptions<ChatServiceOptions> chatOptions,
             ILoggerManager logger,
             ILLamaWeightManager weightManager,
-            IMemoryService memoryService,
+            IKragStore ragStore,
             IChatResponseCache? cache = null,
             IChatMetrics? metrics = null,
             IEnumerable<ISemanticKernelPlugin>? plugins = null,
@@ -76,7 +76,7 @@ namespace ChatService
             IRagDiagnosticsCollector? diagnosticsCollector = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _memoryService = memoryService ?? throw new ArgumentNullException(nameof(memoryService));
+            _ragStore = ragStore ?? throw new ArgumentNullException(nameof(ragStore));
             _cache = cache ?? new NullChatResponseCache();
             _metrics = metrics ?? new NullChatMetrics();
             _structuredEmployeeQueryService = structuredEmployeeQueryService;
@@ -96,7 +96,7 @@ namespace ChatService
 
             _kernel = Kernel.CreateBuilder().Build();
 
-            _plugins = new List<ISemanticKernelPlugin> { new RagPlugin(_memoryService, _logger) };
+            _plugins = new List<ISemanticKernelPlugin> { new RagPlugin(_ragStore, _logger) };
             if (plugins != null)
             {
                 foreach (var p in plugins)
@@ -412,69 +412,36 @@ namespace ChatService
             }
         }
 
-        private async Task<string> SearchRelevantContextSafe(string query, Guid requestId, string? collectionName, CancellationToken cancellationToken)
+        private async Task<string> SearchRelevantContextSafe(string query, Guid requestId, string? collectionName, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(query))
                 return string.Empty;
 
-            using var activity = s_activitySource.StartActivity("chat.rag.memorysearch", ActivityKind.Internal);
-            activity?.SetTag("chat.service", ServiceType);
-
             try
             {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                cts.CancelAfter(_memorySearchTimeout);
-
-                var searchTask = _memoryService.SearchAsync(query, limit: 5, minRelevance: 0.6);
-                var completed = await Task.WhenAny(searchTask, Task.Delay(Timeout.Infinite, cts.Token)).ConfigureAwait(false) == searchTask;
-                if (!completed)
+                var results = await _ragStore.SearchAsync(query, topK: 6);
+                if (!results.Any())
                 {
-                    _logger.LogWarning($"[{requestId}] Memory search timeout {_memorySearchTimeout.TotalSeconds}s");
-                    activity?.SetTag("chat.context.timeout", true);
-                    _metrics.IncrementErrorCount(ServiceType, "MemorySearchTimeout");
+                    _logger.LogDebug($"[{requestId}] RAG found no results.");
                     return string.Empty;
                 }
 
-                var citations = (await searchTask.ConfigureAwait(false)).ToList();
-                if (citations.Count == 0)
+                var sb = new StringBuilder("Relevant context:\n");
+                foreach (var chunk in results)
                 {
-                    _logger.LogDebug($"[{requestId}] No semantic results.");
-                    return string.Empty;
+                    sb.AppendLine($"- [{chunk.TableName}:{chunk.EntityName}] {chunk.Text}");
                 }
 
-                _diagCollector.AddRetrieval(requestId, query, citations, 5);
-
-                var partitions = citations
-                    .SelectMany(c => c.Partitions ?? Enumerable.Empty<Citation.Partition>())
-                    .Where(p => !string.IsNullOrWhiteSpace(p.Text))
-                    .ToList();
-
-                if (partitions.Count == 0)
-                {
-                    _logger.LogDebug($"[{requestId}] Results had no partitions.");
-                    return string.Empty;
-                }
-
-                var sb = new StringBuilder();
-                sb.AppendLine("Relevant context:");
-                foreach (var p in partitions)
-                    sb.AppendLine("- " + p.Text.Trim());
-
+                _logger.LogDebug($"[{requestId}] RAG results {results.Count()} chunks.");
                 return sb.ToString();
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogWarning($"[{requestId}] Memory search canceled.");
-                activity?.SetTag("chat.context.canceled", true);
-                return string.Empty;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"[{requestId}] Memory search error: {ex.Message}");
-                _metrics.IncrementErrorCount(ServiceType, "MemorySearch");
+                _logger.LogError($"[{requestId}] RAG search failed: {ex.Message}");
                 return string.Empty;
             }
         }
+
 
         // --------------- Quantum-Inspired Experimental Retrieval ----------------
         private bool IsQuantumModeRequested(string query)
@@ -486,21 +453,13 @@ namespace ChatService
                 || query.Contains(" quantum ", StringComparison.OrdinalIgnoreCase);
         }
 
-        private async Task<string> QuantumInspiredSearchAsync(string query, Guid requestId, CancellationToken cancellationToken)
+        private async Task<string> QuantumInspiredSearchAsync(string query, Guid requestId, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(query))
                 return string.Empty;
 
-            using var activity = s_activitySource.StartActivity("chat.rag.quantumsearch", ActivityKind.Internal);
-            activity?.SetTag("chat.service", ServiceType);
-            activity?.SetTag("chat.quantum.experimental", true);
-
             try
             {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                cts.CancelAfter(_memorySearchTimeout);
-
-                // 1. Generate query variants ("superposition" of intent fragments)
                 var expansions = GenerateQuantumExpansions(query)
                     .Take(QuantumMaxExpansions)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -509,114 +468,55 @@ namespace ChatService
                 if (expansions.Count == 0)
                     return string.Empty;
 
-                // 2. Parallel semantic searches
-                var citationBag = new ConcurrentBag<(string expansion, Citation citation)>();
+                var bag = new ConcurrentBag<ChunkRecord>();
+
                 var tasks = expansions.Select(async exp =>
                 {
                     try
                     {
-                        var partial = await _memoryService
-                            .SearchAsync(exp, limit: QuantumPerExpansionLimit, minRelevance: QuantumMinRelevance)
-                            .ConfigureAwait(false);
-
+                        var partial = await _ragStore.SearchAsync(exp, topK: QuantumPerExpansionLimit);
                         foreach (var c in partial)
-                            citationBag.Add((exp, c));
+                            bag.Add(c);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogDebug($"[QI:{requestId}] expansion '{exp}' error: {ex.Message}");
+                        _logger.LogWarning($"[QI:{requestId}] expansion '{exp}' error: {ex.Message}");
                     }
                 });
 
-                var searchCompletion = Task.WhenAll(tasks);
-                var finished = await Task.WhenAny(searchCompletion, Task.Delay(Timeout.Infinite, cts.Token))
-                    .ConfigureAwait(false) == searchCompletion;
+                await Task.WhenAll(tasks);
 
-                if (!finished)
-                {
-                    _logger.LogWarning($"[QI:{requestId}] quantum search timeout {_memorySearchTimeout.TotalSeconds}s");
-                    return string.Empty;
-                }
-
-                var allCitations = citationBag.Select(x => x.citation).Distinct().ToList();
-                if (allCitations.Count == 0)
+                if (bag.IsEmpty)
                 {
                     _logger.LogDebug($"[QI:{requestId}] no results across expansions.");
                     return string.Empty;
                 }
 
-                // Record diagnostics (limit argument: expansions.Count * QuantumPerExpansionLimit theoretical max)
-                _diagCollector.AddRetrieval(requestId, query, allCitations, expansions.Count * QuantumPerExpansionLimit);
+                var grouped = bag.GroupBy(c => c.Text)
+                                 .Select(g => new { Text = g.Key, Hits = g.Count() })
+                                 .OrderByDescending(x => x.Hits)
+                                 .Take(QuantumFinalPartitions)
+                                 .ToList();
 
-                // 3. Collect partitions & compute "amplitudes" (frequency-based)
-                var partitionGroups = new Dictionary<string, QuantumPartitionScore>(StringComparer.OrdinalIgnoreCase);
-
-                foreach (var (expansion, citation) in citationBag)
-                {
-                    var parts = citation.Partitions ?? Enumerable.Empty<Citation.Partition>();
-                    foreach (var text in parts.Select(p => p.Text).Where(t => !string.IsNullOrWhiteSpace(t)))
-                    {
-                        var key = text.Trim();
-                        if (!partitionGroups.TryGetValue(key, out var qp))
-                        {
-                            qp = new QuantumPartitionScore { Text = key };
-                            partitionGroups[key] = qp;
-                        }
-                        qp.Hits++;
-                        qp.Expansions.Add(expansion);
-                    }
-                }
-
-                if (partitionGroups.Count == 0)
-                    return string.Empty;
-
-                // 4. Probability collapse: amplitude = hits, probability ~ amplitude^2 emphasizing interference
-                var ranked = partitionGroups.Values
-                    .Select(qp =>
-                    {
-                        qp.Probability = qp.Hits * qp.Hits;
-                        return qp;
-                    })
-                    .OrderByDescending(qp => qp.Probability)
-                    .ThenByDescending(qp => qp.Hits)
-                    .Take(QuantumFinalPartitions)
-                    .ToList();
-
-                if (ranked.Count == 0)
-                    return string.Empty;
-
-                // 5. Assemble enriched quantum context
                 var sb = new StringBuilder();
-                sb.AppendLine("Quantum inspired context (experimental):");
-                sb.AppendLine("Note: This block is built from multi-variant semantic probes; use only if relevant.");
-                sb.AppendLine();
-                foreach (var r in ranked)
+                sb.AppendLine("Quantum inspired context (RAG hybrid):\n");
+                foreach (var g in grouped)
                 {
-                    sb.Append("- ").AppendLine(r.Text);
+                    sb.AppendLine($"- {g.Text}");
                 }
 
-                // (Optional) attach a hidden debug footer if desired:
-                sb.AppendLine();
-                sb.AppendLine("[debug:qisummary]")
-                  .Append("expansions=").Append(expansions.Count).Append("; ")
-                  .Append("uniquePartitions=").Append(partitionGroups.Count).Append("; ")
-                  .Append("selected=").Append(ranked.Count).AppendLine();
-
-                _logger.LogDebug($"[QI:{requestId}] expansions={expansions.Count} uniqueParts={partitionGroups.Count} selected={ranked.Count}");
+                sb.AppendLine()
+                  .Append($"[debug:qiexpansions]={expansions.Count} totalChunks={bag.Count}");
 
                 return sb.ToString();
             }
-            catch (OperationCanceledException)
-            {
-                _logger.LogWarning($"[QI:{requestId}] quantum search canceled.");
-                return string.Empty;
-            }
             catch (Exception ex)
             {
-                _logger.LogError($"[QI:{requestId}] quantum search error: {ex.Message}");
+                _logger.LogError($"[QI:{requestId}] quantum RAG search error: {ex.Message}");
                 return string.Empty;
             }
         }
+
 
         private sealed class QuantumPartitionScore
         {
@@ -720,48 +620,48 @@ namespace ChatService
             return _cache.GenerateCacheKey(joined, ServiceType);
         }
 
-        public async Task<bool> AddDocumentAsync(string documentId, string content, Dictionary<string, object>? metadata = null)
-        {
-            ThrowIfDisposed();
-            _logger.LogDebug($"AddDocumentAsync start id={documentId} len={content?.Length}");
-            if (string.IsNullOrWhiteSpace(documentId) || string.IsNullOrWhiteSpace(content))
-            {
-                _logger.LogWarning("AddDocumentAsync invalid input.");
-                return false;
-            }
+        //public async Task<bool> AddDocumentAsync(string documentId, string content, Dictionary<string, object>? metadata = null)
+        //{
+        //    ThrowIfDisposed();
+        //    _logger.LogDebug($"AddDocumentAsync start id={documentId} len={content?.Length}");
+        //    if (string.IsNullOrWhiteSpace(documentId) || string.IsNullOrWhiteSpace(content))
+        //    {
+        //        _logger.LogWarning("AddDocumentAsync invalid input.");
+        //        return false;
+        //    }
 
-            try
-            {
-                await _memoryService.StoreDocumentAsync(documentId, content, metadata).ConfigureAwait(false);
-                _logger.LogInfo($"Document added: {documentId}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _metrics.IncrementErrorCount(ServiceType, "AddDocument");
-                _logger.LogError($"AddDocument failed ({documentId}): {ex.Message}");
-                return false;
-            }
-        }
+        //    try
+        //    {
+        //        await _ragStore.StoreDocumentAsync(documentId, content, metadata).ConfigureAwait(false);
+        //        _logger.LogInfo($"Document added: {documentId}");
+        //        return true;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _metrics.IncrementErrorCount(ServiceType, "AddDocument");
+        //        _logger.LogError($"AddDocument failed ({documentId}): {ex.Message}");
+        //        return false;
+        //    }
+        //}
 
-        public async Task<bool> DeleteDocumentAsync(string documentId)
-        {
-            ThrowIfDisposed();
-            _logger.LogDebug($"DeleteDocumentAsync start id={documentId}");
-            try
-            {
-                var result = await _memoryService.DeleteDocumentAsync(documentId).ConfigureAwait(false);
-                if (!result)
-                    _logger.LogWarning($"DeleteDocumentAsync returned false for {documentId}");
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _metrics.IncrementErrorCount(ServiceType, "DeleteDocument");
-                _logger.LogError($"DeleteDocument failed ({documentId}): {ex.Message}");
-                return false;
-            }
-        }
+        //public async Task<bool> DeleteDocumentAsync(string documentId)
+        //{
+        //    ThrowIfDisposed();
+        //    _logger.LogDebug($"DeleteDocumentAsync start id={documentId}");
+        //    try
+        //    {
+        //        var result = await _ragStore.DeleteDocumentAsync(documentId).ConfigureAwait(false);
+        //        if (!result)
+        //            _logger.LogWarning($"DeleteDocumentAsync returned false for {documentId}");
+        //        return result;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _metrics.IncrementErrorCount(ServiceType, "DeleteDocument");
+        //        _logger.LogError($"DeleteDocument failed ({documentId}): {ex.Message}");
+        //        return false;
+        //    }
+        //}
 
         private static string GetLastUserMessage(ChatHistory history)
             => history.Messages.LastOrDefault(m => m.AuthorRole == AuthorRole.User)?.Content ?? string.Empty;
