@@ -2,6 +2,7 @@ using ChatService;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
+using SharpLlama.ChatService;
 using Xunit;
 
 namespace SharpLlama.Tests.Metrics;

@@ -1,124 +1,128 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.KernelMemory;
+﻿using Microsoft.Data.SqlClient;
 using SharpLlama.Contracts;
 using SharpLlama.Entities;
+using System.Data;
 
-namespace SharpLlama.ChatService;
-
-// Simple SQL-backed memory service that retrieves chunks from AI_ContextChunks.
-public sealed class SqlRagMemoryStore : IMemoryService
+namespace SharpLlama.ChatService
 {
-    private readonly NorthwindStarterContext _db;
-
-    public SqlRagMemoryStore(NorthwindStarterContext db)
+    /// <summary>
+    /// SQL-backed RAG memory store that persists text chunks + embeddings
+    /// into AI_contextChunks and performs cosine-similarity search.
+    /// </summary>
+    public class SqlRagMemoryStore : IKragStore
     {
-        _db = db ?? throw new ArgumentNullException(nameof(db));
-    }
+        private readonly string _connectionString;
+        private readonly ILocalEmbedder _embed;
 
-    public async Task<IEnumerable<Citation>> SearchAsync(string query, int limit = 5, double minRelevance = 0.0)
-    {
-        limit = limit <= 0 ? 5 : limit;
-        minRelevance = double.IsNaN(minRelevance) ? 0.0 : Math.Clamp(minRelevance, 0.0, 1.0);
-
-        var tokens = Tokenize(query);
-        if (tokens.Count == 0)
-            return Array.Empty<Citation>();
-
-        // Filter rows that match ANY token (translated as OR in SQL), cap prefetch for scoring.
-        var prefetch = await _db.AiContextChunks.AsNoTracking()
-            .Where(c => c.ChunkText != null && tokens.Any(t => EF.Functions.Like(c.ChunkText!, $"%{t}%")))
-            .Select(c => new { c.ChunkId, c.SourceTable, c.SourceKey, c.ChunkText })
-            .Take(200)
-            .ToListAsync()
-            .ConfigureAwait(false);
-
-        // Score rows by fraction of tokens matched (0..1), then filter by minRelevance.
-        var ranked = prefetch
-            .Select(c =>
-            {
-                int hits = tokens.Count(t => c.ChunkText!.Contains(t, StringComparison.OrdinalIgnoreCase));
-                double score = tokens.Count == 0 ? 0 : (double)hits / tokens.Count;
-                return (c, score);
-            })
-            .Where(x => x.score >= minRelevance)
-            .OrderByDescending(x => x.score)
-            .ThenByDescending(x => (x.c.ChunkText?.Length ?? 0))
-            .Take(limit)
-            .ToList();
-
-        var citations = new List<Citation>(ranked.Count);
-        foreach (var (c, score) in ranked)
+        public SqlRagMemoryStore(string connectionString, ILocalEmbedder embed)
         {
-            var partition = new Citation.Partition
-            {
-                PartitionNumber = c.ChunkId,
-                Relevance = (float)score,
-                Text = c.ChunkText ?? string.Empty
-            };
-
-            citations.Add(new Citation
-            {
-                SourceName = $"{c.SourceTable ?? "Unknown"}:{c.SourceKey ?? "Unknown"}",
-                Partitions = new List<Citation.Partition> { partition }
-            });
+            _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            _embed = embed ?? throw new ArgumentNullException(nameof(embed));
         }
 
-        return citations;
-    }
-
-    public async Task<string> StoreDocumentAsync(string documentId, string content, Dictionary<string, object>? metadata = null)
-    {
-        if (string.IsNullOrWhiteSpace(documentId)) throw new ArgumentException("documentId is required.", nameof(documentId));
-        if (string.IsNullOrWhiteSpace(content)) throw new ArgumentException("content is required.", nameof(content));
-
-        var row = new AiContextChunk
+        /// <summary>
+        /// Upsert a chunk and ensure the embedding is stored (computed if missing).
+        /// </summary>
+        public async Task UpsertChunkAsync(ChunkRecord chunk)
         {
-            SourceTable = metadata != null && metadata.TryGetValue("SourceTable", out var st) ? Convert.ToString(st) : "Documents",
-            SourceKey = documentId,
-            ChunkText = content,
-            Embedding = null
-        };
+            if (chunk is null) throw new ArgumentNullException(nameof(chunk));
+            if (chunk.Embedding == null || chunk.Embedding.Length == 0)
+            {
+                var text = chunk.Text ?? string.Empty;
+                chunk.Embedding = await _embed.EmbedAsync(text);
+            }
 
-        _db.AiContextChunks.Add(row);
-        await _db.SaveChangesAsync().ConfigureAwait(false);
-        return documentId;
-    }
+            const string sql = @"
+MERGE AI_contextChunks AS t
+USING (SELECT @Id AS Id) AS s ON t.Id = s.Id
+WHEN MATCHED THEN UPDATE SET TableName=@TableName, EntityName=@EntityName, ChunkText=@Text, Embedding=@Embedding
+WHEN NOT MATCHED THEN INSERT (Id,TableName,EntityName,ChunkText,Embedding)
+VALUES (@Id,@TableName,@EntityName,@Text,@Embedding);";
 
-    public async Task<bool> DeleteDocumentAsync(string documentId)
-    {
-        if (string.IsNullOrWhiteSpace(documentId)) return false;
+            using var con = new SqlConnection(_connectionString);
+            await con.OpenAsync();
+            using var cmd = new SqlCommand(sql, con);
 
-        var rows = await _db.AiContextChunks
-            .Where(c => c.SourceKey == documentId)
-            .ToListAsync()
-            .ConfigureAwait(false);
+            cmd.Parameters.AddWithValue("@Id", chunk.Id);
+            cmd.Parameters.AddWithValue("@TableName", chunk.TableName ?? string.Empty);
+            cmd.Parameters.AddWithValue("@EntityName", chunk.EntityName ?? string.Empty);
+            cmd.Parameters.AddWithValue("@Text", chunk.Text ?? string.Empty);
+            cmd.Parameters.Add("@Embedding", SqlDbType.VarBinary).Value = ToBytes(chunk.Embedding);
 
-        if (rows.Count == 0) return false;
+            await cmd.ExecuteNonQueryAsync();
+        }
 
-        _db.AiContextChunks.RemoveRange(rows);
-        await _db.SaveChangesAsync().ConfigureAwait(false);
-        return true;
-    }
+        /// <summary>
+        /// Vector search: embed the query, load candidates, compute cosine, return topK.
+        /// </summary>
+        public async Task<IEnumerable<ChunkRecord>> SearchAsync(string query, int topK = 5)
+        {
+            var queryVec = await _embed.EmbedAsync(query ?? string.Empty);
+            var all = await LoadAllChunksAsync();
 
-    public async Task<IEnumerable<string>> GetDocumentIdsAsync()
-    {
-        return await _db.AiContextChunks.AsNoTracking()
-            .Where(c => c.SourceKey != null)
-            .Select(c => c.SourceKey!)
-            .Distinct()
-            .OrderBy(x => x)
-            .ToListAsync()
-            .ConfigureAwait(false);
-    }
+            var ranked = all
+                .Select(c => new { c, score = Cosine(queryVec, c.Embedding ?? Array.Empty<float>()) })
+                .OrderByDescending(x => x.score)
+                .Take(topK)
+                .Select(x => x.c)
+                .ToList();
 
-    private static List<string> Tokenize(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return [];
-        return [.. text.Split(new[] { ' ', '\t', '\r', '\n', ',', '.', ';', ':', '-', '_' },
-                          StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                   .Where(t => t.Length > 2)
-                   .Distinct(StringComparer.OrdinalIgnoreCase)
-                   .Take(12)];
+            return ranked;
+        }
+
+        private async Task<List<ChunkRecord>> LoadAllChunksAsync()
+        {
+            var list = new List<ChunkRecord>();
+            const string sql = "SELECT Id, TableName, EntityName, ChunkText, Embedding FROM AI_contextChunks;";
+
+            using var con = new SqlConnection(_connectionString);
+            await con.OpenAsync();
+            using var cmd = new SqlCommand(sql, con);
+            using var rdr = await cmd.ExecuteReaderAsync();
+
+            while (await rdr.ReadAsync())
+            {
+                list.Add(new ChunkRecord
+                {
+                    Id = rdr.GetString(0),
+                    TableName = rdr.GetString(1),
+                    EntityName = rdr.GetString(2),
+                    Text = rdr.GetString(3),
+                    Embedding = rdr.IsDBNull(4) ? Array.Empty<float>() : FromBytes((byte[])rdr[4])
+                });
+            }
+            return list;
+        }
+
+        private static double Cosine(float[] a, float[] b)
+        {
+            int n = Math.Min(a?.Length ?? 0, b?.Length ?? 0);
+            if (n == 0) return 0;
+
+            double dot = 0, ma = 0, mb = 0;
+            for (int i = 0; i < n; i++)
+            {
+                dot += a[i] * b[i];
+                ma += a[i] * a[i];
+                mb += b[i] * b[i];
+            }
+            return dot / (Math.Sqrt(ma) * Math.Sqrt(mb) + 1e-9);
+        }
+
+        private static byte[] ToBytes(float[] v)
+        {
+            if (v == null || v.Length == 0) return Array.Empty<byte>();
+            var bytes = new byte[v.Length * sizeof(float)];
+            Buffer.BlockCopy(v, 0, bytes, 0, bytes.Length);
+            return bytes;
+        }
+
+        private static float[] FromBytes(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length == 0) return Array.Empty<float>();
+            var v = new float[bytes.Length / sizeof(float)];
+            Buffer.BlockCopy(bytes, 0, v, 0, bytes.Length);
+            return v;
+        }
     }
 }
-

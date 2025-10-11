@@ -1,4 +1,3 @@
-using ChatService;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
@@ -12,7 +11,6 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Polly;
 using Polly.Timeout;
-using SharpLlama.Contracts;
 using SharpLlama.Entities.Validation;
 using SharpLlama.Infrastructure;
 using SharpLlama.Middleware;
@@ -233,7 +231,7 @@ builder.Services.ConfigureLoggerService();
 builder.Services.ConfigureChatServices(builder.Configuration);
 builder.Services.AddMemoryServices(builder.Configuration);
 builder.Services.ConfigureIngestion();
-
+builder.Services.AddSqlRagWithLocalEmbeddings(builder.Configuration);
 // Warmup hosted service
 builder.Services.AddHostedService<SharpLlama.HostedServices.ModelWarmupHostedService>();
 
@@ -262,11 +260,6 @@ builder.Services
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// Remove previous singleton overrides to avoid lifetime mismatches.
-// IStatefulChatService is already registered as scoped in ConfigureChatServices().
-// Register RagChatService as scoped because it depends on scoped IMemoryService.
-builder.Services.AddScoped<IRagChatService, RagChatService>();
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", p =>
@@ -293,6 +286,7 @@ app.UseRequestMetrics();
 app.UseGlobalProblemDetails();
 app.UseAuthorization();
 app.UseCors("Frontend");
+
 
 // Prometheus scrape endpoint (default path /metrics)
 app.MapPrometheusScrapingEndpoint("/metrics");

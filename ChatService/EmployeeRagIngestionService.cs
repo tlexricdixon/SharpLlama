@@ -11,10 +11,10 @@ namespace SharpLlama.ChatService;
 /// Service responsible for ingesting employee data into a vector or memory store for RAG (Retrieval-Augmented Generation) scenarios.
 /// Gathers employee profile information, aggregates simple order statistics, builds a textual document, and stores it with metadata.
 /// </summary>
-public class EmployeeRagIngestionService(NorthwindStarterContext db, IMemoryService memory, ILoggerManager logger)
+public class EmployeeRagIngestionService(NorthwindStarterContext db, IKragStore memory, ILoggerManager logger) : IEmployeeRagIngestionService
 {
     private readonly NorthwindStarterContext _db = db;
-    private readonly IMemoryService _memory = memory;
+    private readonly IKragStore _memory = memory;
     private readonly ILoggerManager _logger = logger;
 
     /// <summary>
@@ -110,7 +110,14 @@ public class EmployeeRagIngestionService(NorthwindStarterContext db, IMemoryServ
                     ["docHash"] = hash
                 };
 
-                await _memory.StoreDocumentAsync(id, content, metadata);
+                await _memory.UpsertChunkAsync(new ChunkRecord
+                {
+                    Id = id,
+                    TableName = "Employees",
+                    EntityName = $"{e.FirstName} {e.LastName}".Trim(),
+                    Text = content,
+                    // optional embedding generation handled in SqlRagStore
+                });
                 successCount++;
                 _logger.LogDebug($"Ingested EmployeeId={e.EmployeeId} in {perItemSw.ElapsedMilliseconds} ms");
             }

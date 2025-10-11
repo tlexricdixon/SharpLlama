@@ -372,3 +372,4 @@ FodyWeavers.xsd
 /Infastructure/Infrastructure.csproj
 /Entities/Entities.csproj
 /Contracts/Contracts.csproj
+/SharpLlama/Models/nomic-embed-text-v1.5.Q2_K.gguf
