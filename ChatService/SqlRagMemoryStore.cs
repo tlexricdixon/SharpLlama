@@ -33,11 +33,11 @@ namespace SharpLlama.ChatService
             }
 
             const string sql = @"
-MERGE AI_contextChunks AS t
-USING (SELECT @Id AS Id) AS s ON t.Id = s.Id
-WHEN MATCHED THEN UPDATE SET TableName=@TableName, EntityName=@EntityName, ChunkText=@Text, Embedding=@Embedding
-WHEN NOT MATCHED THEN INSERT (Id,TableName,EntityName,ChunkText,Embedding)
-VALUES (@Id,@TableName,@EntityName,@Text,@Embedding);";
+                MERGE AI_contextChunks AS t
+                USING (SELECT @Id AS Id) AS s ON t.ChunkID = s.Id
+                WHEN MATCHED THEN UPDATE SET SourceTable=@TableName, SourceKey=@EntityName, ChunkText=@Text, Embedding=@Embedding
+                WHEN NOT MATCHED THEN INSERT (ChunkID,SourceTable,SourceKey,ChunkText,Embedding)
+                VALUES (@Id,@TableName,@EntityName,@Text,@Embedding);";
 
             using var con = new SqlConnection(_connectionString);
             await con.OpenAsync();
@@ -73,7 +73,7 @@ VALUES (@Id,@TableName,@EntityName,@Text,@Embedding);";
         private async Task<List<ChunkRecord>> LoadAllChunksAsync()
         {
             var list = new List<ChunkRecord>();
-            const string sql = "SELECT Id, TableName, EntityName, ChunkText, Embedding FROM AI_contextChunks;";
+            const string sql = "SELECT ChunkID, SourceTable, SourceKey, ChunkText, Embedding FROM AI_contextChunks;";
 
             using var con = new SqlConnection(_connectionString);
             await con.OpenAsync();

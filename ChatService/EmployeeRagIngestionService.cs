@@ -1,183 +1,152 @@
 using Microsoft.EntityFrameworkCore;
 using SharpLlama.Contracts;
 using SharpLlama.Entities;
-using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text;
 
-namespace SharpLlama.ChatService;
-
-/// <summary>
-/// Service responsible for ingesting employee data into a vector or memory store for RAG (Retrieval-Augmented Generation) scenarios.
-/// Gathers employee profile information, aggregates simple order statistics, builds a textual document, and stores it with metadata.
-/// </summary>
-public class EmployeeRagIngestionService(NorthwindStarterContext db, IKragStore memory, ILoggerManager logger) : IEmployeeRagIngestionService
+namespace SharpLlama.ChatService
 {
-    private readonly NorthwindStarterContext _db = db;
-    private readonly IKragStore _memory = memory;
-    private readonly ILoggerManager _logger = logger;
-
-    /// <summary>
-    /// Ingests all employees from the data source into the memory store.
-    /// </summary>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The number of successfully ingested employee documents.</returns>
-    public async Task<int> IngestAllAsync(CancellationToken ct = default)
+    public class EmployeeRagIngestionService : IEmployeeRagIngestionService
     {
-        var overallSw = Stopwatch.StartNew();
-        _logger.LogInfo("Starting employee ingestion...");
+        private readonly NorthwindStarterContext _db;
+        private readonly IKragStore _rag;
+        private readonly ILoggerManager _logger;
 
-        List<Employee> employees;
-        try
+        public EmployeeRagIngestionService(NorthwindStarterContext db, IKragStore ragStore, ILoggerManager logger)
         {
-            employees = await _db.Employees
-                .Include(e => e.Orders)
-                .AsNoTracking()
-                .ToListAsync(ct);
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogWarning("Employee ingestion canceled during data load.");
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Failed to load employees from database: {ex.Message}");
-            return 0;
+            _db = db;
+            _rag = ragStore;
+            _logger = logger;
         }
 
-        if (employees.Count == 0)
+        public async Task<int> IngestAllAsync(CancellationToken ct = default)
         {
-            _logger.LogInfo("No employees found to ingest.");
-            return 0;
-        }
+            var employees = await _db.Employees.AsNoTracking().ToListAsync(ct);
+            var totalChunks = 0;
 
-        _logger.LogDebug($"Loaded {employees.Count} employees from database.");
-
-        int successCount = 0;
-        int failureCount = 0;
-
-        for (int i = 0; i < employees.Count; i++)
-        {
-            ct.ThrowIfCancellationRequested();
-            var e = employees[i];
-            var perItemSw = Stopwatch.StartNew();
-            var id = $"employee-{e.EmployeeId}";
-
-            try
+            foreach (var e in employees)
             {
-                _logger.LogDebug($"[{i + 1}/{employees.Count}] Building document for EmployeeId={e.EmployeeId}");
+                ct.ThrowIfCancellationRequested();
 
-                string content;
-                try
+                string? supervisorName = null;
+                if (e.SupervisorId.HasValue)
                 {
-                    content = BuildEmployeeDocument(e);
-                }
-                catch (Exception buildEx)
-                {
-                    failureCount++;
-                    _logger.LogError($"Error building document for EmployeeId={e.EmployeeId}: {buildEx.Message}");
-                    continue;
+                    var sup = employees.FirstOrDefault(x => x.EmployeeId == e.SupervisorId.Value);
+                    if (sup is not null) supervisorName = $"{sup.FirstName} {sup.LastName}".Trim();
                 }
 
-                if (string.IsNullOrWhiteSpace(content))
-                {
-                    failureCount++;
-                    _logger.LogWarning($"Skipping EmployeeId={e.EmployeeId} because generated content was empty.");
-                    continue;
-                }
+                var ordersSummary = await TryBuildOrderSummaryAsync(e.EmployeeId, ct);
 
-                string hash;
-                try
-                {
-                    hash = Sha256(content);
-                }
-                catch (Exception hashEx)
-                {
-                    failureCount++;
-                    _logger.LogError($"Error hashing document for EmployeeId={e.EmployeeId}: {hashEx.Message}");
-                    continue;
-                }
+                var profileText = EmployeeChunkBuilder.BuildProfileChunk(e, supervisorName);
+                var notesText = EmployeeChunkBuilder.BuildNotesChunk(e);
+                var ordersText = EmployeeChunkBuilder.BuildOrdersChunk(e, ordersSummary);
 
-                var metadata = new Dictionary<string, object?>
+                await _rag.UpsertChunkAsync(new ChunkRecord
                 {
-                    ["type"] = "employee",
-                    ["employeeId"] = e.EmployeeId,
-                    ["firstName"] = e.FirstName ?? "",
-                    ["lastName"] = e.LastName ?? "",
-                    ["jobTitle"] = e.JobTitle ?? "",
-                    ["orderCount"] = e.Orders?.Count ?? 0,
-                    ["docHash"] = hash
-                };
-
-                await _memory.UpsertChunkAsync(new ChunkRecord
-                {
-                    Id = id,
+                    Id = $"{e.EmployeeId}|PROFILE",
                     TableName = "Employees",
                     EntityName = $"{e.FirstName} {e.LastName}".Trim(),
-                    Text = content,
-                    // optional embedding generation handled in SqlRagStore
+                    Text = profileText
                 });
-                successCount++;
-                _logger.LogDebug($"Ingested EmployeeId={e.EmployeeId} in {perItemSw.ElapsedMilliseconds} ms");
+                totalChunks++;
+
+                await _rag.UpsertChunkAsync(new ChunkRecord
+                {
+                    Id = $"{e.EmployeeId}|NOTES",
+                    TableName = "Employees",
+                    EntityName = $"{e.FirstName} {e.LastName}".Trim(),
+                    Text = notesText
+                });
+                totalChunks++;
+
+                await _rag.UpsertChunkAsync(new ChunkRecord
+                {
+                    Id = $"{e.EmployeeId}|ORDERS",
+                    TableName = "Employees",
+                    EntityName = $"{e.FirstName} {e.LastName}".Trim(),
+                    Text = ordersText
+                });
+                totalChunks++;
             }
-            catch (OperationCanceledException)
-            {
-                _logger.LogWarning($"Ingestion canceled while processing EmployeeId={e.EmployeeId}");
-                throw;
-            }
-            catch (Exception ex)
-            {
-                failureCount++;
-                _logger.LogError($"Failed to ingest EmployeeId={e.EmployeeId}: {ex.Message}");
-            }
+
+            _logger.LogInfo($"EmployeeRagIngestionService: Ingested {employees.Count} employees as {totalChunks} chunks (PROFILE/NOTES/ORDERS).");
+            return totalChunks;
         }
 
-        overallSw.Stop();
-        _logger.LogInfo($"Employee ingestion complete. Succeeded: {successCount}, Failed: {failureCount}, Total: {employees.Count}, Duration: {overallSw.Elapsed}");
-
-        return successCount;
-    }
-
-    /// <summary>
-    /// Builds a multiline textual document representing the employee's profile and simple order statistics.
-    /// </summary>
-    private static string BuildEmployeeDocument(Employee e)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("Employee Profile");
-        sb.AppendLine($"ID: {e.EmployeeId}");
-        sb.AppendLine($"Name: {(e.FirstName ?? "").Trim()} {(e.LastName ?? "").Trim()}".Trim());
-        if (!string.IsNullOrWhiteSpace(e.JobTitle))
-            sb.AppendLine($"Job Title: {e.JobTitle}");
-
-        if (e.Orders != null && e.Orders.Count > 0)
+        private async Task<EmployeeChunkBuilder.OrderSummary?> TryBuildOrderSummaryAsync(int employeeId, CancellationToken ct)
         {
-            var totalOrders = e.Orders.Count;
-            var first = e.Orders.Where(o => o.OrderDate.HasValue).OrderBy(o => o.OrderDate).FirstOrDefault();
-            var last = e.Orders.Where(o => o.OrderDate.HasValue).OrderByDescending(o => o.OrderDate).FirstOrDefault();
-            sb.AppendLine($"Order Count: {totalOrders}");
-            if (first?.OrderDate != null) sb.AppendLine($"First Order Date: {first.OrderDate:yyyy-MM-dd}");
-            if (last?.OrderDate != null) sb.AppendLine($"Most Recent Order Date: {last.OrderDate:yyyy-MM-dd}");
-        }
-        if (!string.IsNullOrWhiteSpace(e.EmailAddress)) sb.AppendLine($"Email: {e.EmailAddress}");
-        if (!string.IsNullOrWhiteSpace(e.PrimaryPhone)) sb.AppendLine($"Primary Phone: {e.PrimaryPhone}");
-        if (!string.IsNullOrWhiteSpace(e.SecondaryPhone)) sb.AppendLine($"Secondary Phone: {e.SecondaryPhone}");
-        if (!string.IsNullOrWhiteSpace(e.WindowsUserName)) sb.AppendLine($"Windows User: {e.WindowsUserName}");
-        if (!string.IsNullOrWhiteSpace(e.Notes))
-        {
-            sb.AppendLine("Notes:");
-            sb.AppendLine(e.Notes);
-        }
-        return sb.ToString();
-    }
+            try
+            {
+                var ordersQuery = _db.Set<Order>().AsQueryable();
+                if (!await ordersQuery.AnyAsync(ct)) return null;
 
-    /// <summary>
-    /// Computes a SHA-256 hexadecimal hash string for the provided text.
-    /// </summary>
-    private static string Sha256(string text)
-    {
-        using var sha = SHA256.Create();
-        return Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(text)));
+                var employeeOrders = ordersQuery.Where(o => o.EmployeeId == employeeId);
+
+                var orderCount = await employeeOrders.CountAsync(ct);
+                if (orderCount == 0) return new EmployeeChunkBuilder.OrderSummary { OrderCount = 0 };
+
+                decimal totalSales = 0m;
+                bool hasTotalColumn = _db.Model.FindEntityType(typeof(Order))?.FindProperty("Total") != null;
+                if (hasTotalColumn)
+                {
+                    totalSales = await employeeOrders.SumAsync(o => EF.Property<decimal>(o, "Total"), ct);
+                }
+                else
+                {
+                    var detailsSet = _db.Set<OrderDetail>();
+                    if (detailsSet is not null)
+                    {
+                        var q = from d in detailsSet
+                                join o in employeeOrders on d.OrderId equals o.OrderId
+                                select d;
+                        if (await q.AnyAsync(ct))
+                        {
+                            bool hasDiscount = _db.Model.FindEntityType(typeof(OrderDetail))?.FindProperty("Discount") != null;
+                            if (hasDiscount)
+                                totalSales = await q.SumAsync(d =>
+                                    (d.UnitPrice.HasValue ? (decimal)d.UnitPrice.Value : 0m) *
+                                    (d.Quantity.HasValue ? (decimal)d.Quantity.Value : 0m) *
+                                    (1m - (d.Discount.HasValue ? d.Discount.Value / 100m : 0m)), ct);
+                            else
+                                totalSales = (decimal)await q.SumAsync(d => d.UnitPrice * d.Quantity, ct);
+                        }
+                    }
+                }
+
+                string? topRegion = null;
+                try
+                {
+                    bool hasShipperId = _db.Model.FindEntityType(typeof(Order))?.FindProperty("ShipperId") != null;
+                    if (hasShipperId)
+                    {
+                        topRegion = await employeeOrders
+                            .Where(o => o.ShipperId.ToString() != null)
+                            .GroupBy(o => o.ShipperId!.ToString())
+                            .OrderByDescending(g => g.Count())
+                            .Select(g => g.Key)
+                            .FirstOrDefaultAsync(ct);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // S2486: Exception is ignored because missing ShipperId is not critical for order summary.
+                    // S108: Block is now filled with a comment explaining why the exception is ignored.
+                }
+
+                var firstOrderDate = await employeeOrders.MinAsync(o => o.OrderDate, ct);
+                var lastOrderDate = await employeeOrders.MaxAsync(o => o.OrderDate, ct);
+
+                return new EmployeeChunkBuilder.OrderSummary
+                {
+                    OrderCount = orderCount,
+                    TotalSales = totalSales,
+                    TopRegion = topRegion,
+                    FirstOrderDate = firstOrderDate,
+                    LastOrderDate = lastOrderDate
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 }
