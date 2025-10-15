@@ -1,10 +1,8 @@
 using FluentValidation;
 using FluentValidation.AspNetCore;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.Http;
-using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -16,9 +14,6 @@ using SharpLlama.Infrastructure;
 using SharpLlama.Middleware;
 using SharpLlama.Security;
 using SharpLlama.ServiceExtentions;
-using System.Net;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -296,46 +291,3 @@ app.MapGet("/api", () => "Welcome to the Chat API!");
 app.MapControllers();
 
 await app.RunAsync();
-
-public sealed class ApiKeyAuthenticationOptions : AuthenticationSchemeOptions
-{
-    public string HeaderName { get; set; } = "X-API-Key";
-}
-
-public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthenticationOptions>
-{
-    private readonly IApiKeyValidator _validator;
-    public ApiKeyAuthenticationHandler(
-        IOptionsMonitor<ApiKeyAuthenticationOptions> options,
-        ILoggerFactory logger,
-        UrlEncoder encoder,
-        ISystemClock clock,
-        IApiKeyValidator validator) : base(options, logger, encoder, clock)
-    {
-        _validator = validator;
-    }
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
-        if (!Request.Headers.TryGetValue(Options.HeaderName, out var value))
-            return Task.FromResult(AuthenticateResult.NoResult());
-
-        if (_validator.TryValidate(value.ToString().Trim(), out var identity) && identity is not null)
-        {
-            var claims = new List<Claim>();
-            if (!string.IsNullOrWhiteSpace(identity.UserName))
-                claims.Add(new Claim(ClaimTypes.Name, identity.UserName));
-            var claimsIdentity = new ClaimsIdentity(claims, authenticationType: Scheme.Name);
-            var principal = new ClaimsPrincipal(claimsIdentity);
-            var ticket = new AuthenticationTicket(principal, Scheme.Name);
-            return Task.FromResult(AuthenticateResult.Success(ticket));
-        }
-
-        return Task.FromResult(AuthenticateResult.Fail("Invalid API Key"));
-    }
-
-    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
-    {
-        Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-        return Task.CompletedTask;
-    }
-}

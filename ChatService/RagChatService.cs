@@ -15,7 +15,7 @@ using static LLama.LLamaTransforms;
 
 namespace SharpLlama.ChatService
 {
-    public class RagChatService : IRagChatService, IDisposable
+    public class RagChatService : IRagChatService
     {
         private const string ServiceType = "RAG";
         private static readonly ActivitySource s_activitySource = new("ChatService.RagChatService");
@@ -288,7 +288,7 @@ namespace SharpLlama.ChatService
         {
             if (history.Messages.Count == 0) return history;
 
-            var last = history.Messages.Last();
+            var last = history.Messages[^1];
             if (last.AuthorRole != AuthorRole.User) return history;
 
             string current = last.Content;
@@ -444,7 +444,7 @@ namespace SharpLlama.ChatService
 
 
         // --------------- Quantum-Inspired Experimental Retrieval ----------------
-        private bool IsQuantumModeRequested(string query)
+        private static bool IsQuantumModeRequested(string query)
         {
             if (string.IsNullOrWhiteSpace(query)) return false;
             // Simple triggers; intentionally explicit to avoid accidental activation
@@ -620,49 +620,6 @@ namespace SharpLlama.ChatService
             return _cache.GenerateCacheKey(joined, ServiceType);
         }
 
-        //public async Task<bool> AddDocumentAsync(string documentId, string content, Dictionary<string, object>? metadata = null)
-        //{
-        //    ThrowIfDisposed();
-        //    _logger.LogDebug($"AddDocumentAsync start id={documentId} len={content?.Length}");
-        //    if (string.IsNullOrWhiteSpace(documentId) || string.IsNullOrWhiteSpace(content))
-        //    {
-        //        _logger.LogWarning("AddDocumentAsync invalid input.");
-        //        return false;
-        //    }
-
-        //    try
-        //    {
-        //        await _ragStore.StoreDocumentAsync(documentId, content, metadata).ConfigureAwait(false);
-        //        _logger.LogInfo($"Document added: {documentId}");
-        //        return true;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _metrics.IncrementErrorCount(ServiceType, "AddDocument");
-        //        _logger.LogError($"AddDocument failed ({documentId}): {ex.Message}");
-        //        return false;
-        //    }
-        //}
-
-        //public async Task<bool> DeleteDocumentAsync(string documentId)
-        //{
-        //    ThrowIfDisposed();
-        //    _logger.LogDebug($"DeleteDocumentAsync start id={documentId}");
-        //    try
-        //    {
-        //        var result = await _ragStore.DeleteDocumentAsync(documentId).ConfigureAwait(false);
-        //        if (!result)
-        //            _logger.LogWarning($"DeleteDocumentAsync returned false for {documentId}");
-        //        return result;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _metrics.IncrementErrorCount(ServiceType, "DeleteDocument");
-        //        _logger.LogError($"DeleteDocument failed ({documentId}): {ex.Message}");
-        //        return false;
-        //    }
-        //}
-
         private static string GetLastUserMessage(ChatHistory history)
             => history.Messages.LastOrDefault(m => m.AuthorRole == AuthorRole.User)?.Content ?? string.Empty;
 
@@ -691,19 +648,34 @@ namespace SharpLlama.ChatService
 
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
-            try
-            {
-                _context?.Dispose();
-                _inferenceLock.Dispose();
-                _logger.LogDebug("RagChatService disposed.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Dispose error: {ex.Message}");
-            }
+            Dispose(true);
             GC.SuppressFinalize(this);
         }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (disposing)
+            {
+                try
+                {
+                    _context?.Dispose();
+                    _inferenceLock.Dispose();
+                    _logger.LogDebug("RagChatService disposed.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Dispose error: {ex.Message}");
+                }
+            }
+            // No unmanaged resources to release
+        }
+
+        // Optionally, add a finalizer if unmanaged resources are ever added
+        // ~RagChatService()
+        // {
+        //     Dispose(false);
+        // }
     }
 }

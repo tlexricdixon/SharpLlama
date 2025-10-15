@@ -1,7 +1,6 @@
-using System.Text;
-using Entities;
 using Microsoft.EntityFrameworkCore;
 using SharpLlama.Entities;
+using System.Text;
 
 namespace SharpLlama.ChatService;
 
